@@ -1,0 +1,687 @@
+#include "app.h"
+#include "graphics/directx.h"
+#include "imgui.h"
+#include "backends/imgui_impl_dx11.h"
+#include "backends/imgui_impl_win32.h"
+#include "ui/home.h"
+#include<filesystem>
+#include<iostream>
+#include <string>
+#include "imgui_md.h"
+#include "imgui_freetype.h"
+#include "Workers/UploadWorker.h"
+#include "Workers/TokenWorker.h"
+#include <thread>
+#include "memdb/AppState.h"
+#include "IconsFontAwesome6.h"
+#include "ui/chatwindow.h"
+ImFont* g_FontRegular = nullptr;
+ImFont* g_FontH1 = nullptr;
+ImFont* g_FontH2 = nullptr;
+ImFont* g_FontH3 = nullptr;
+ImFont* g_FontMono = nullptr;
+ImFontAtlas* m_shared_atlas = nullptr;
+MyMarkdownRenderer g_MdRenderer;
+
+static const void RenderWindow(WindowState* ws)
+{
+    if (ws->type == WindowType::Home)
+    {
+        RenderChatUI();
+    }
+    else
+    {
+        RenderConversationWindow(
+            ws->chat_id,
+            0);
+    }
+};
+
+ImFont* MyMarkdownRenderer::get_font() const
+{
+    switch (m_hlevel)
+    {
+    case 1: return g_FontH1;
+    case 2: return g_FontH2;
+    case 3: return g_FontH3;
+    default: return g_FontRegular;
+    }
+}
+
+void MyMarkdownRenderer::open_url() const
+{
+    ShellExecuteA(
+        nullptr,
+        "open",
+        m_href.c_str(),
+        nullptr,
+        nullptr,
+        SW_SHOWNORMAL
+    );
+}
+
+bool MyMarkdownRenderer::get_image(image_info& nfo) const
+{
+    return false;
+}
+
+imgui_md* GetMarkdownRenderer()
+{
+    return &g_MdRenderer;
+}
+
+void App::Cef_Init(CefMainArgs main_args)
+{
+    CefSettings settings;
+
+    settings.no_sandbox = true;
+
+    std::filesystem::path absolute_cache =
+        AppState::GetUserDir() / "cef_persistent_profile";
+    std::wstring cache_path = absolute_cache.wstring();
+
+    CefString(&settings.cache_path).FromWString(cache_path);
+
+
+    settings.persist_session_cookies = true;
+    settings.multi_threaded_message_loop = true;
+    settings.log_severity = LOGSEVERITY_DISABLE;
+    CefInitialize(
+        main_args,
+        settings,
+        nullptr,
+        nullptr);
+}
+
+void App::SetupCEF(CefMainArgs main_args)
+{
+    Cef_Init(main_args);
+}
+
+void App::StartWorkers() {
+    std::thread(UploadWorker).detach();
+    std::thread(TokenWorker).detach();
+}
+
+bool App::RegisterWindowClass()
+{
+    wc = {
+        sizeof(wc),
+        CS_CLASSDC,
+        WndProc,
+        0L,
+        0L,
+        GetModuleHandle(nullptr),
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        L"ChatGPTReader",
+        nullptr
+    };
+
+    return RegisterClassExW(&wc);
+}
+
+void App::ApplyImGuiStyle()
+{
+    ImGui::StyleColorsDark();
+
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    style.WindowRounding = 12.0f;
+    style.ChildRounding = 10.0f;
+    style.FrameRounding = 8.0f;
+    style.PopupRounding = 8.0f;
+    style.ScrollbarRounding = 12.0f;
+    style.GrabRounding = 8.0f;
+
+    style.WindowPadding = ImVec2(16, 16);
+    style.FramePadding = ImVec2(12, 10);
+    style.ItemSpacing = ImVec2(10, 10);
+
+    ImVec4* colors = style.Colors;
+
+    colors[ImGuiCol_WindowBg] = ImVec4(0.09f, 0.10f, 0.12f, 1.00f);
+    colors[ImGuiCol_ChildBg] = ImVec4(0.12f, 0.13f, 0.16f, 1.00f);
+
+    colors[ImGuiCol_FrameBg] = ImVec4(0.16f, 0.17f, 0.21f, 1.00f);
+    colors[ImGuiCol_FrameBgHovered] = ImVec4(0.20f, 0.21f, 0.26f, 1.00f);
+    colors[ImGuiCol_FrameBgActive] = ImVec4(0.24f, 0.25f, 0.30f, 1.00f);
+
+    colors[ImGuiCol_Button] = ImVec4(0.20f, 0.22f, 0.27f, 1.00f);
+    colors[ImGuiCol_ButtonHovered] = ImVec4(0.28f, 0.30f, 0.36f, 1.00f);
+    colors[ImGuiCol_ButtonActive] = ImVec4(0.35f, 0.38f, 0.45f, 1.00f);
+
+    colors[ImGuiCol_Header] = ImVec4(0.20f, 0.24f, 0.30f, 1.00f);
+    colors[ImGuiCol_HeaderHovered] = ImVec4(0.25f, 0.30f, 0.36f, 1.00f);
+    colors[ImGuiCol_HeaderActive] = ImVec4(0.30f, 0.35f, 0.42f, 1.00f);
+
+    colors[ImGuiCol_Border] = ImVec4(0.22f, 0.24f, 0.30f, 0.6f);
+    colors[ImGuiCol_Text] = ImVec4(0.92f, 0.93f, 0.95f, 1.00f);
+
+    style.ScaleAllSizes(1.0f);
+}
+
+// Builds fonts into whatever context is currently active
+void App::BuildFonts()
+{
+    ImGuiIO& io = ImGui::GetIO();
+
+    const ImWchar* ranges = io.Fonts->GetGlyphRangesJapanese();
+
+    ImFontConfig cfg;
+    cfg.OversampleH = 2;
+    cfg.OversampleV = 2;
+    cfg.PixelSnapH = false;
+
+    ImFontConfig emoji_cfg;
+    emoji_cfg.MergeMode = true;
+    emoji_cfg.PixelSnapH = true;
+    emoji_cfg.OversampleH = 1;
+    emoji_cfg.OversampleV = 1;
+
+    static const ImWchar emoji_ranges[] = { 0x2000, 0x2BFF, 0x1F000, 0x1FAFF, 0 };
+
+    ImFontConfig icon_cfg;
+    icon_cfg.MergeMode = true;
+    icon_cfg.PixelSnapH = true;
+    icon_cfg.OversampleH = 1;
+    icon_cfg.OversampleV = 1;
+
+    static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+
+    std::string font_path = "./fonts/NotoSans-Regular.ttf";
+    std::string mono_path = "./fonts/JetBrainsMonoNL-Regular.ttf";
+    std::string emoji_path = "./fonts/NotoEmoji-Regular.ttf";
+    std::string icon_path = "./fonts/Font Awesome 6 Free-Solid-900.otf";
+
+    g_FontRegular = io.Fonts->AddFontFromFileTTF(font_path.c_str(), 20.0f, &cfg, ranges);
+    io.Fonts->AddFontFromFileTTF(emoji_path.c_str(), 20.0f, &emoji_cfg, emoji_ranges);
+    io.Fonts->AddFontFromFileTTF(icon_path.c_str(), 20.0f, &icon_cfg, icon_ranges);
+
+    g_FontH3 = io.Fonts->AddFontFromFileTTF(font_path.c_str(), 22.0f, &cfg, ranges);
+    io.Fonts->AddFontFromFileTTF(emoji_path.c_str(), 22.0f, &emoji_cfg, emoji_ranges);
+    io.Fonts->AddFontFromFileTTF(icon_path.c_str(), 22.0f, &icon_cfg, icon_ranges);
+
+    g_FontH2 = io.Fonts->AddFontFromFileTTF(font_path.c_str(), 26.0f, &cfg, ranges);
+    io.Fonts->AddFontFromFileTTF(emoji_path.c_str(), 26.0f, &emoji_cfg, emoji_ranges);
+    io.Fonts->AddFontFromFileTTF(icon_path.c_str(), 26.0f, &icon_cfg, icon_ranges);
+
+    g_FontH1 = io.Fonts->AddFontFromFileTTF(font_path.c_str(), 34.0f, &cfg, ranges);
+    io.Fonts->AddFontFromFileTTF(emoji_path.c_str(), 34.0f, &emoji_cfg, emoji_ranges);
+    io.Fonts->AddFontFromFileTTF(icon_path.c_str(), 34.0f, &icon_cfg, icon_ranges);
+
+    g_FontMono = io.Fonts->AddFontFromFileTTF(mono_path.c_str(), 18.0f, &cfg, ranges);
+    io.Fonts->AddFontFromFileTTF(emoji_path.c_str(), 18.0f, &emoji_cfg, emoji_ranges);
+    io.Fonts->AddFontFromFileTTF(icon_path.c_str(), 18.0f, &icon_cfg, icon_ranges);
+
+    if (!g_FontRegular)
+    {
+        g_FontRegular = g_FontH1 = g_FontH2 = g_FontH3 = g_FontMono =
+            io.Fonts->AddFontDefault();
+    }
+}
+
+WindowState* App::CreateWindows(WindowType type, const std::string& chatId)
+{
+    auto ws = std::make_unique<WindowState>();
+    ws->type = type;
+    ws->chat_id = chatId;
+
+    ws->hwnd = CreateWindowW(
+        wc.lpszClassName,
+        type == WindowType::Home ? L"ChatGPT Reader" : L"Conversation",
+        WS_OVERLAPPEDWINDOW,
+        100, 100, 900, 600,
+        nullptr, nullptr, wc.hInstance, ws.get());
+
+    if (!ws->hwnd) {
+        return nullptr;
+    }
+
+    auto* ptr = ws.get();
+    windows.push_back(std::move(ws));
+
+    if (g_pd3dDevice)
+    {
+        if (!CreateSwapChain(ptr))
+        {
+            DestroyWindow(ptr->hwnd);
+            return nullptr;
+        }
+    }
+
+    if (type == WindowType::Conversation)
+    {
+        ptr->imgui_ctx = ImGui::CreateContext();
+        ImGui::SetCurrentContext(ptr->imgui_ctx);
+
+        ImGuiIO& io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+        ApplyImGuiStyle();
+        BuildFonts();
+
+        ImGui_ImplWin32_Init(ptr->hwnd);
+        ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
+        ImGui_ImplDX11_CreateDeviceObjects(); // ← force buffer/shader creation now
+
+        ImGui::SetCurrentContext(windows.front()->imgui_ctx);
+    }
+    ShowWindow(ptr->hwnd, SW_SHOWDEFAULT);
+    UpdateWindow(ptr->hwnd);
+
+    return ptr;
+}
+
+bool App::InitImGui()
+{
+    if (!CreateDevice())
+    {
+        CleanupDevice();
+        UnregisterClassW(wc.lpszClassName, wc.hInstance);
+        return false;
+    }
+
+    for (auto& w : windows)
+    {
+        if (!CreateSwapChain(w.get()))
+            return false;
+    }
+
+    IMGUI_CHECKVERSION();
+
+    // 1. Create home context
+    windows.front()->imgui_ctx = ImGui::CreateContext();
+    ImGui::SetCurrentContext(windows.front()->imgui_ctx);
+
+    // 2. Configure IO
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+    // 3. Style
+    ApplyImGuiStyle();
+
+    // 4. Fonts
+    BuildFonts();
+
+    ImGui_ImplWin32_Init(windows.front()->hwnd);
+    ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
+    ImGui_ImplDX11_CreateDeviceObjects(); // ← add this
+
+    return true;
+}
+
+void App::MainLoop()
+{
+    ImVec4 clear_color = ImVec4(0.1f, 0.1f, 0.1f, 1.0f);
+    bool done = false;
+
+    while (!done)
+    {
+        MSG msg;
+        while (PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+            if (msg.message == WM_QUIT) done = true;
+        }
+        if (done) break;
+
+        // --- sync windows with open chats ---
+        auto open_chats = AppState::GetOpenChats();
+
+        for (auto& chat_id : open_chats) {
+            bool exists = false;
+            for (auto& w : windows) {
+                if (w->chat_id == chat_id &&
+                    w->type == WindowType::Conversation) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists)
+                CreateWindows(WindowType::Conversation, chat_id);
+        }
+
+        windows.erase(
+            std::remove_if(windows.begin(), windows.end(),
+                [](const std::unique_ptr<WindowState>& w) {
+                    if (w->type == WindowType::Home) return false;
+                    return !w->open;
+                }),
+            windows.end());
+
+        // --- render ---
+        for (auto& w : windows) {
+            if (!w->open || !w->swapchain || !w->imgui_ctx) continue;
+
+            ImGui::SetCurrentContext(w->imgui_ctx);
+
+            RECT rect;
+            GetClientRect(w->hwnd, &rect);
+            float client_w = (float)(rect.right - rect.left);
+            float client_h = (float)(rect.bottom - rect.top);
+
+            ImGui_ImplDX11_NewFrame();
+            ImGui_ImplWin32_NewFrame();
+
+            ImGui::GetIO().DisplaySize = ImVec2(client_w, client_h);
+
+            ImGui::NewFrame();
+
+            RenderWindow(w.get());
+
+            ImGui::Render();
+
+            g_pd3dDeviceContext->OMSetRenderTargets(1, &w->rtv, nullptr);
+            g_pd3dDeviceContext->ClearRenderTargetView(
+                w->rtv, (float*)&clear_color);
+            ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+            w->swapchain->Present(1, 0);
+        }
+    }
+}
+
+void App::Shutdown()
+{
+    for (auto& w : windows)
+    {
+        if (!w->imgui_ctx) continue;
+        ImGui::SetCurrentContext(w->imgui_ctx);
+        ImGui_ImplDX11_Shutdown();
+        ImGui_ImplWin32_Shutdown();
+        ImGui::DestroyContext(w->imgui_ctx);
+        w->imgui_ctx = nullptr;
+    }
+
+    CleanupDevice();
+
+    for (auto& w : windows)
+    {
+        if (w->hwnd)
+            DestroyWindow(w->hwnd);
+    }
+
+    windows.clear();
+
+    UnregisterClassW(
+        wc.lpszClassName,
+        wc.hInstance);
+}
+
+int App::Run()
+{
+    if (!RegisterWindowClass())
+        return -1;
+
+    auto* home = CreateWindows(WindowType::Home);
+
+    if (!home)
+        return -1;
+
+    if (!InitImGui())
+        return -1;
+
+    MainLoop();
+
+    Shutdown();
+
+    return 0;
+}
+
+void App::OnBeforeCommandLineProcessing(
+    const CefString& process_type,
+    CefRefPtr<CefCommandLine> command_line)
+{
+    command_line->AppendSwitch("disable-gpu");
+    command_line->AppendSwitch("disable-gpu-compositing");
+    command_line->AppendSwitch("disable-gpu-rasterization");
+    command_line->AppendSwitch("disable-software-rasterizer");
+    command_line->AppendSwitch("disable-smooth-scrolling");
+    command_line->AppendSwitch("js-flags=--expose-gc --max-semi-space-size=1 --max-old-space-size=128");
+    command_line->AppendSwitch("mute-audio");
+    command_line->AppendSwitch("disable-audio-output");
+    command_line->AppendSwitch("disable-renderer-backgrounding");
+    command_line->AppendSwitch("disable-background-timer-throttling");
+    command_line->AppendSwitch("disable-backgrounding-occluded-windows");
+    command_line->AppendSwitch("disable-extensions");
+    command_line->AppendSwitch("disable-plugins");
+    command_line->AppendSwitch("disable-printing");
+}
+
+
+
+#include "directx.h"
+#include "imgui.h"
+#include "imgui_impl_win32.h"
+#include "imgui_impl_dx11.h"
+#include "Dto/Windows.h"
+#include "memdb/AppState.h"
+#include <dxgi.h>
+
+ID3D11Device* g_pd3dDevice = nullptr;
+ID3D11DeviceContext* g_pd3dDeviceContext = nullptr;
+
+
+void CreateRenderTarget(WindowState* ws)
+{
+    if (!ws || !ws->swapchain)
+        return;
+
+    ID3D11Texture2D* pBackBuffer = nullptr;
+
+    ws->swapchain->GetBuffer(
+        0,
+        IID_PPV_ARGS(&pBackBuffer));
+
+    g_pd3dDevice->CreateRenderTargetView(
+        pBackBuffer,
+        nullptr,
+        &ws->rtv);
+
+    pBackBuffer->Release();
+}
+
+void CleanupRenderTarget(WindowState* ws)
+{
+    if (!ws)
+        return;
+
+    if (ws->rtv)
+    {
+        ws->rtv->Release();
+        ws->rtv = nullptr;
+    }
+}
+
+bool CreateDevice()
+{
+    D3D_FEATURE_LEVEL featureLevel;
+
+    const D3D_FEATURE_LEVEL featureLevelArray[] =
+    {
+        D3D_FEATURE_LEVEL_11_0,
+        D3D_FEATURE_LEVEL_10_0
+    };
+
+    HRESULT res =
+        D3D11CreateDevice(
+            nullptr,
+            D3D_DRIVER_TYPE_HARDWARE,
+            nullptr,
+            0,
+            featureLevelArray,
+            2,
+            D3D11_SDK_VERSION,
+            &g_pd3dDevice,
+            &featureLevel,
+            &g_pd3dDeviceContext);
+
+    return SUCCEEDED(res);
+}
+
+
+void CleanupDevice()
+{
+    if (g_pd3dDeviceContext)
+    {
+        g_pd3dDeviceContext->Release();
+        g_pd3dDeviceContext = nullptr;
+    }
+
+    if (g_pd3dDevice)
+    {
+        g_pd3dDevice->Release();
+        g_pd3dDevice = nullptr;
+    }
+}
+
+bool CreateSwapChain(WindowState* ws)
+{
+    if (!ws || !g_pd3dDevice)
+        return false;
+
+    IDXGIDevice* dxgiDevice = nullptr;
+    IDXGIAdapter* adapter = nullptr;
+    IDXGIFactory* factory = nullptr;
+
+    HRESULT hr =
+        g_pd3dDevice->QueryInterface(
+            __uuidof(IDXGIDevice),
+            (void**)&dxgiDevice);
+
+    if (FAILED(hr))
+        return false;
+
+    hr = dxgiDevice->GetAdapter(&adapter);
+
+    if (FAILED(hr))
+    {
+        dxgiDevice->Release();
+        return false;
+    }
+
+    hr = adapter->GetParent(
+        __uuidof(IDXGIFactory),
+        (void**)&factory);
+
+    if (FAILED(hr))
+    {
+        adapter->Release();
+        dxgiDevice->Release();
+        return false;
+    }
+
+    DXGI_SWAP_CHAIN_DESC sd = {};
+
+    sd.BufferCount = 2;
+
+    sd.BufferDesc.Width = 0;
+    sd.BufferDesc.Height = 0;
+
+    sd.BufferDesc.Format =
+        DXGI_FORMAT_R8G8B8A8_UNORM;
+
+    sd.BufferDesc.RefreshRate.Numerator = 60;
+    sd.BufferDesc.RefreshRate.Denominator = 1;
+
+    sd.BufferUsage =
+        DXGI_USAGE_RENDER_TARGET_OUTPUT;
+
+    sd.OutputWindow = ws->hwnd;
+
+    sd.SampleDesc.Count = 1;
+    sd.SampleDesc.Quality = 0;
+
+    sd.Windowed = TRUE;
+
+    sd.SwapEffect =
+        DXGI_SWAP_EFFECT_DISCARD;
+
+    hr = factory->CreateSwapChain(
+        g_pd3dDevice,
+        &sd,
+        &ws->swapchain);
+
+    factory->Release();
+    adapter->Release();
+    dxgiDevice->Release();
+
+    if (FAILED(hr))
+        return false;
+
+    CreateRenderTarget(ws);
+
+    return true;
+}
+
+void CleanupSwapChain(WindowState* ws)
+{
+    if (!ws)
+        return;
+
+    CleanupRenderTarget(ws);
+
+    if (ws->swapchain)
+    {
+        ws->swapchain->Release();
+        ws->swapchain = nullptr;
+    }
+}
+
+extern IMGUI_IMPL_API
+LRESULT ImGui_ImplWin32_WndProcHandler(
+    HWND,
+    UINT,
+    WPARAM,
+    LPARAM);
+
+LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    if (msg == WM_NCCREATE) {
+        auto* cs = reinterpret_cast<CREATESTRUCT*>(lParam);
+        auto* w = reinterpret_cast<WindowState*>(cs->lpCreateParams);
+        w->hwnd = hWnd;
+        SetWindowLongPtr(hWnd, GWLP_USERDATA,
+            reinterpret_cast<LONG_PTR>(w));
+        return TRUE;
+    }
+
+    auto* ws = reinterpret_cast<WindowState*>(
+        GetWindowLongPtr(hWnd, GWLP_USERDATA));
+
+    if (ws && ws->imgui_ctx)
+        ImGui::SetCurrentContext(ws->imgui_ctx);
+
+    if (ImGui::GetCurrentContext() != nullptr)
+        if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
+            return true;
+
+    switch (msg) {
+    case WM_SIZE:
+        if (ws && ws->swapchain && wParam != SIZE_MINIMIZED) {
+            CleanupRenderTarget(ws);
+            ws->swapchain->ResizeBuffers(0,
+                LOWORD(lParam), HIWORD(lParam),
+                DXGI_FORMAT_UNKNOWN, 0);
+            CreateRenderTarget(ws);
+        }
+        return 0;
+
+    case WM_SYSCOMMAND:
+        if ((wParam & 0xfff0) == SC_KEYMENU) return 0;
+        break;
+
+    case WM_DESTROY:
+        if (ws && ws->type == WindowType::Conversation) {
+            ws->open = false;
+            AppState::CloseChat(ws->chat_id);
+            return 0;
+        }
+        PostQuitMessage(0);
+        return 0;
+    }
+
+    return DefWindowProcW(hWnd, msg, wParam, lParam);
+}

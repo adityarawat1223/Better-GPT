@@ -1,0 +1,66 @@
+# Visual Studio & Build
+.vs/
+.vscode/
+Debug/
+Release/
+x64/
+x86/
+Build/
+out/
+bin/
+tools/
+*.sln.DotSettings.user
+*.vcxproj.user
+*.VC.db
+*.VC.db-shm
+*.VC.db-wal
+
+# Object files & binaries
+*.o
+*.obj
+*.a
+*.lib
+*.exe
+*.dll
+*.so
+*.dylib
+*.pdb
+*.ilk
+
+# IDE
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.iml
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+
+# Dependencies
+vcpkg_installed/
+packages/
+conan.lock
+node_modules/
+
+# Temporary & OS files
+*.tmp
+*.log
+*.db
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+
+# CEF/Chromium
+cef_binary/
+cef_cache/
+resources/cef/
+
+# Generated
+__pycache__/
+*.pyc
+generated/

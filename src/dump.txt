@@ -1,0 +1,169 @@
+std::string token = JsEscape(AppState::GetTokenInfo());
+    std::string oai_is = JsEscape(AppState::GetHeaders("X-OAI-IS"));
+   
+
+    std::string js =
+        "fetch('https://chatgpt.com/backend-api/conversation/" + ChatId + "',{"
+        "method:'GET',"
+        "headers:{"
+        "'Authorization':'" + token + "',"
+        "'x-oai-is':'" + oai_is + "',"
+        "'oai-session-id':'" + AppState::GetHeaders("OAI-Session-Id") + "',"
+        "'oai-device-id':'" + AppState::GetHeaders("OAI-Device-Id") + "',"
+        "'oai-client-build-number':'" + AppState::GetHeaders("OAI-Client-Build-Number") + "',"
+        "'oai-language':'en-US',"
+        "'Accept':'*/*',"
+        "'Referer':'https://chatgpt.com/c/" + ChatId + "'"
+        "},"
+        "credentials:'include'"
+        "});";
+
+    browser->GetMainFrame()->ExecuteJavaScript(js, "https://chatgpt.com", 0);
+
+
+
+   auto browser = AppState::GetHiddenBrowser();
+    
+
+    std::string token = JsEscape(AppState::GetTokenInfo());
+    std::string oai_is = JsEscape(AppState::GetHeaders("X-OAI-IS"));
+
+    std::string js =
+        "fetch('https://chatgpt.com/backend-api/files/download/" + FileId + "?post_id=&inline=false" + "',{"
+        "method:'GET',"
+        "headers:{"
+        "'Authorization':'" + token + "',"
+        "'x-oai-is':'" + oai_is + "',"
+        "'oai-session-id':'" + AppState::GetHeaders("OAI-Session-Id") + "',"
+        "'oai-device-id':'" + AppState::GetHeaders("OAI-Device-Id") + "',"
+        "'oai-client-build-number':'" + AppState::GetHeaders("OAI-Client-Build-Number") + "',"
+        "'oai-language':'en-US',"
+        "'Accept':'*/*',"
+        "},"
+        "credentials:'include'"
+        "});";
+   
+    browser->GetMainFrame()->ExecuteJavaScript(js, "https://chatgpt.com", 0);
+
+
+
+
+     json j = {
+    { "file_name", fileref.filename },
+    { "mime_type", fileref.mime_type },
+    { "file_size", fileref.size_bytes},
+    {"store_in_library" , true},
+    {"timezone_offset_min",-330},
+    {"use_case" ,"multimodal" },
+    {"library_persistence_mode","opportunistic"}
+    };
+
+    json fulldto = fileref;
+    std::string payload = j.dump();
+    std::string dto = fulldto.dump();
+    std::string token = JsEscape(AppState::GetTokenInfo());
+    std::string oai_is = JsEscape(AppState::GetHeaders("X-OAI-IS"));
+   
+
+    std::string js = R"((async () => {
+        try {
+            console.log("START");
+            
+            const payload = )" + payload + R"(;
+            const dto = )" + dto + R"(;
+            
+            console.log("BEFORE FIRST FETCH");
+            const res = await fetch("https://chatgpt.com/backend-api/files", {
+                method: "POST",
+                headers: {
+                    "Authorization": ")" + token + R"(",
+                    "x-oai-is": ")" + oai_is + R"(",
+                    "oai-session-id": ")" + JsEscape(AppState::GetHeaders("OAI-Session-Id")) + R"(",
+                    "oai-device-id": ")" + JsEscape(AppState::GetHeaders("OAI-Device-Id")) + R"(",
+                    "oai-client-build-number": ")" + JsEscape(AppState::GetHeaders("OAI-Client-Build-Number")) + R"(",
+                    "oai-language": "en-US",
+                    "Content-Type": "application/json"
+                },
+                credentials: "include",
+                body: JSON.stringify(payload)
+            });
+            
+            const txt = await res.text();
+            
+            console.log("BEFORE SECOND FETCH");
+            const res2 = await fetch("https://chatgpt.com/upload-sync", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    request: dto,
+                    response: JSON.parse(txt) 
+                })
+            });
+            
+            console.log("SECOND FETCH DONE, STATUS:", res2.status);
+            
+        } catch(err) {
+            console.error("ERROR:", err);
+        }
+    })();)";
+        std::cout << js << std::endl;
+        auto browser = AppState::GetHiddenBrowser();
+
+  
+
+        browser->GetMainFrame()->ExecuteJavaScript(js, "https://chatgpt.com", 0);
+
+
+
+
+std::string escaped_payload = JsEscape(out);
+
+    std::string token = JsEscape(AppState::GetTokenInfo());
+    std::string oai_is = JsEscape(AppState::GetHeaders("X-OAI-IS"));
+    std::string oai_session_id = JsEscape(AppState::GetHeaders("OAI-Session-Id"));
+    std::string oai_device_id = JsEscape(AppState::GetHeaders("OAI-Device-Id"));
+    std::string oai_client_build_numer = JsEscape(AppState::GetHeaders("OAI-Client-Build-Number"));
+    std::string open_sentinel_proof_token = JsEscape(AppState::GetHeaders("openai-sentinel-proof-token"));
+    std::string open_sentinel_chat_req_token = JsEscape(AppState::GetHeaders("openai-sentinel-chat-requirements-token"));
+    std::string open_sentinel_turnstile_token = JsEscape(AppState::GetHeaders("openai-sentinel-turnstile-token"));
+
+    std::string js = R"((async () => {
+try {
+    const payload = JSON.parse(')" + escaped_payload + R"(');
+    const response = await fetch(
+        "https://chatgpt.com/backend-api/conversation",
+        {
+            method: "POST",
+            headers:
+            {
+                "accept": "text/event-stream",
+                "authorization": ")" + token + R"(",
+                "content-type": "application/json",
+                "x-oai-is": ")" + oai_is + R"(",
+                "oai-session-id": ")" + oai_session_id + R"(",
+                "oai-device-id": ")" + oai_device_id + R"(",
+                "oai-client-build-number": ")" + oai_client_build_numer + R"(",
+                "oai-language": "en-US",
+                
+                // INJECTED SENTINEL PROTECTION ARMOR HERE:
+                "openai-sentinel-proof-token": ")" + open_sentinel_proof_token + R"(",
+                "openai-sentinel-chat-requirements-token": ")" + open_sentinel_chat_req_token + R"(",
+                "openai-sentinel-turnstile-token": ")" + open_sentinel_turnstile_token + R"("
+            },
+            credentials: "include",
+            body: JSON.stringify(payload)
+        });
+    console.log("[MESSAGE] request sent");
+    console.log("[MESSAGE] status:", response.status);
+}
+catch(err){
+    console.error("[MESSAGE ERROR]", err);
+}
+})();)";
+
+    auto browser = AppState::GetHiddenBrowser();
+    if (browser && browser->GetMainFrame()) {
+        browser->GetMainFrame()->ExecuteJavaScript(js, "https://chatgpt.com", 0);
+    }
