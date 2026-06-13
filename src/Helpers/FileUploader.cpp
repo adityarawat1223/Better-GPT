@@ -503,7 +503,7 @@ void FileUploader(FileRef fileref)
         fs::create_directories(cache_dir);
 
         fs::path cached_file =
-            cache_dir / (fileref.id + extension);
+            cache_dir / (fileref.lib_file_id + extension);
 
         std::cout
             << "[Uploader] Caching file..."

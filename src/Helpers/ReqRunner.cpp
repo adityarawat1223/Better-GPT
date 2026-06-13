@@ -406,58 +406,37 @@ void ReqRunner::MessageStreamSync(const std::string& body)
             assistant_thinking = aiObj.contains("thinking") && aiObj["thinking"].is_string() ? aiObj["thinking"].get<std::string>() : "";
         }
 
-        // Get a fresh snapshot for dedup checks
-        auto chats = AppState::GetChatsFromMap(chat_id);
-
         // -----------------------------
-        // User message - only append if not already present
+        // User message - insert once so later sync frames do not drop attachments.
         // -----------------------------
         if (has_user_msg && !user_msg_id.empty())
         {
-            bool already_exists = false;
-            for (const auto& existing : chats) {
-                if (existing.message_id == user_msg_id) {
-                    already_exists = true;
-                    break;
-                }
+            ChatMessage msg;
+            msg.user = true;
+            msg.message_id = user_msg_id;
+            msg.timestamp = (uint64_t)time(nullptr);
+
+            InputBox inbox = AppState::Get_Input_Box(chat_id);
+            for (const auto& pair : inbox.assets) {
+                msg.assets.push_back(pair.second);
             }
 
-            if (!already_exists)
-            {
-                ChatMessage msg;
-                msg.user = true;
-                msg.message_id = user_msg_id;
-                msg.timestamp = (uint64_t)time(nullptr);
+            Santizer(msg, user_content);
 
-                InputBox inbox = AppState::Get_Input_Box(chat_id);
-                for (const auto& pair : inbox.assets) {
-                    msg.assets.push_back(pair.second);
-                }
+            if (AppState::InsertChatMessageIfMissing(chat_id, std::move(msg))) {
                 AppState::Clear_Input_Assets(chat_id);
-
-                ChatMessage msg_copy = msg; // keep a copy for AppState
-                Santizer(msg, user_content);
-                Santizer(msg_copy, user_content);
-
-                AppState::AppendChatMessage(chat_id, std::move(msg_copy));
-                // Add to our local snapshot for the assistant check
-                chats.push_back(std::move(msg));
             }
         }
 
         // -----------------------------
-        // Assistant message - update in-place if same ID, else append
+        // Assistant message - ignore brand-new id-only frames until something is visible
         // -----------------------------
         if (has_assistant_msg && !assistant_msg_id.empty())
         {
-            // Check if this assistant message already exists
-            bool found_existing = false;
-            for (const auto& existing : chats) {
-                if (existing.message_id == assistant_msg_id) {
-                    found_existing = true;
-                    break;
-                }
-            }
+            bool has_visible_content = !assistant_content.empty() || !assistant_thinking.empty();
+
+            if (!has_visible_content)
+                return;
 
             ChatMessage msg;
             msg.user = false;
@@ -467,12 +446,7 @@ void ReqRunner::MessageStreamSync(const std::string& body)
 
             Santizer(msg, assistant_content);
 
-            if (found_existing) {
-                AppState::UpdateChatMessageById(chat_id, std::move(msg));
-            }
-            else {
-                AppState::AppendChatMessage(chat_id, std::move(msg));
-            }
+            AppState::UpsertChatMessage(chat_id, std::move(msg));
         }
     }
     catch (const std::exception& e)

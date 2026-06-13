@@ -34,8 +34,8 @@ using json = nlohmann::json;
             Chatid = init["chat_id"].get<std::string>();
             local_id = init["local_id"].get<std::string>();
             file_id = init["file_id"].get<std::string>();
+            AppState::Update_File_Processed(Chatid, local_id, lib_id, file_id);
             AppState::Update_Asset_Status(UploadStatus::Ready, Chatid, local_id);
-            AppState::Update_Upload_Url(Chatid, local_id, lib_id, file_id);
         }
 
         else {

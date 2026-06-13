@@ -67,22 +67,9 @@ void MessageScript(const std::string& out, const std::string& temp_chat_id) {
         const payload = JSON.parse(rawPayload);
 
         let conversationId = payload.conversation_id || "";
-        const extractText = (parts) => {
-            if (!Array.isArray(parts)) return '';
-            return parts.map(p => {
-                if (typeof p === 'string') return p;
-                if (p && typeof p === 'object') {
-                    if (typeof p.text === 'string') return p.text;
-                    if (typeof p.content === 'string') return p.content;
-                    if (Array.isArray(p.content)) return extractText(p.content);
-                }
-                return '';
-            }).join('');
-        };
-
         const userParts = payload.messages && payload.messages[0] && payload.messages[0].content && payload.messages[0].content.parts;
         let userMessageId = payload.messages && payload.messages[0] && payload.messages[0].id || "";
-        let userMessageContent = userParts ? extractText(userParts) : "";
+        let userMessageContent = userParts ? userParts.filter(p => typeof p === 'string').join('') : "";
 
         let assistantMessageId = "";
         let assistantMessageContent = "";
@@ -216,7 +203,7 @@ void MessageScript(const std::string& out, const std::string& temp_chat_id) {
                         if (data.type === "input_message" && data.input_message) {
                             userMessageId = data.input_message.id;
                             if (data.input_message.content && data.input_message.content.parts) {
-                                userMessageContent = extractText(data.input_message.content.parts);
+                                userMessageContent = data.input_message.content.parts.filter(p => typeof p === 'string').join('');
                             }
                             // Sync user message when we get its proper ID
                             if (!userMessageSynced && conversationId) {
@@ -241,12 +228,12 @@ void MessageScript(const std::string& out, const std::string& temp_chat_id) {
                             if (msg.author && msg.author.role === "user") {
                                 userMessageId = msg.id;
                                 if (msg.content && msg.content.parts) {
-                                    userMessageContent = extractText(msg.content.parts);
+                                    userMessageContent = msg.content.parts.filter(p => typeof p === 'string').join('');
                                 }
                             } else if (msg.author && msg.author.role === "assistant") {
                                 assistantMessageId = msg.id;
                                 if (msg.content && msg.content.parts) {
-                                    assistantMessageContent = extractText(msg.content.parts);
+                                    assistantMessageContent = msg.content.parts.filter(p => typeof p === 'string').join('');
                                 }
                             }
                         }
@@ -256,12 +243,12 @@ void MessageScript(const std::string& out, const std::string& temp_chat_id) {
                             if (msg.author && msg.author.role === "user") {
                                 userMessageId = msg.id;
                                 if (msg.content && msg.content.parts) {
-                                    userMessageContent = extractText(msg.content.parts);
+                                    userMessageContent = msg.content.parts.filter(p => typeof p === 'string').join('');
                                 }
                             } else if (msg.author && msg.author.role === "assistant") {
                                 assistantMessageId = msg.id;
                                 if (msg.content && msg.content.parts) {
-                                    assistantMessageContent = extractText(msg.content.parts);
+                                    assistantMessageContent = msg.content.parts.filter(p => typeof p === 'string').join('');
                                 }
                             }
                         }
@@ -271,12 +258,12 @@ void MessageScript(const std::string& out, const std::string& temp_chat_id) {
                             if (msg.author && msg.author.role === "user") {
                                 userMessageId = msg.id;
                                 if (msg.content && msg.content.parts) {
-                                    userMessageContent = extractText(msg.content.parts);
+                                    userMessageContent = msg.content.parts.filter(p => typeof p === 'string').join('');
                                 }
                             } else if (msg.author && msg.author.role === "assistant") {
                                 assistantMessageId = msg.id;
                                 if (msg.content && msg.content.parts) {
-                                    assistantMessageContent = extractText(msg.content.parts);
+                                    assistantMessageContent = msg.content.parts.filter(p => typeof p === 'string').join('');
                                 }
                             }
                         }
@@ -286,14 +273,12 @@ void MessageScript(const std::string& out, const std::string& temp_chat_id) {
 
                             for (const op of data.v) {
                                 if (op.p && op.p.startsWith("/message/content/parts/")) {
+                                    if (op.o === "append") {
                                         if (typeof op.v === "string") {
                                             assistantMessageContent += op.v;
                                             contentChanged = true;
                                         } else if (Array.isArray(op.v)) {
-                                            assistantMessageContent += extractText(op.v);
-                                            contentChanged = true;
-                                        } else if (op.v && typeof op.v === "object") {
-                                            assistantMessageContent += extractText([op.v]);
+                                            assistantMessageContent += op.v.filter(p => typeof p === 'string').join('');
                                             contentChanged = true;
                                         }
                                     } else if (op.o === "replace") {
@@ -301,10 +286,7 @@ void MessageScript(const std::string& out, const std::string& temp_chat_id) {
                                             assistantMessageContent = op.v;
                                             contentChanged = true;
                                         } else if (Array.isArray(op.v)) {
-                                            assistantMessageContent = extractText(op.v);
-                                            contentChanged = true;
-                                        } else if (op.v && typeof op.v === "object") {
-                                            assistantMessageContent = extractText([op.v]);
+                                            assistantMessageContent = op.v.filter(p => typeof p === 'string').join('');
                                             contentChanged = true;
                                         }
                                     }

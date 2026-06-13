@@ -20,7 +20,7 @@ struct FileRef
     uint64_t size_bytes = 0;
     int width = 0;
     int height = 0;
-    UploadStatus uploadstatus;
+    UploadStatus uploadstatus = UploadStatus::Queued;
     std::string local_id;
     std::string lib_file_id;
     std::string upload_url;

@@ -91,6 +91,8 @@ public:
     static std::vector<ChatMessage> GetChatsFromMap(const std::string& ChatId);
     static void AppendChatMessage(const std::string& ChatId, ChatMessage&& message);
     static void UpdateChatMessageById(const std::string& ChatId, ChatMessage&& message);
+    static bool UpsertChatMessage(const std::string& ChatId, ChatMessage&& message);
+    static bool InsertChatMessageIfMissing(const std::string& ChatId, ChatMessage&& message);
     static std::set<std::string> GetOpenChats();
     static void CloseChat(const std::string& ChatId);
     static void AddChat(const std::string& ChatId);
@@ -110,12 +112,13 @@ public:
     static void Submit_Search_Job(const std::string& query, const std::vector<std::string>& chatIds);
     static bool Pop_Search_Job(SearchJob& out);
     static int GetActiveSearchId();
-    static void Update_Asset_Status(UploadStatus uploadstatus, const std::string& ChatId, const std::string& local_id);
+    static bool Update_Asset_Status(UploadStatus uploadstatus, const std::string& ChatId, const std::string& local_id);
     static void Set_Parent(const std::string& ChatId, const std::string& Pid);
     static std::string Get_Parent(const std::string& ChatId);
     static void Update_Model(const std::string& model, const std::string& chat_id);
     static UploadStatus Get_Asset_Status(const std::string& ChatId, const std::string& Local_id);
-    static void Update_Upload_Url(const std::string& ChatId, const std::string& local_id, const std::string& url, const std::string& file_id);
+    static bool Update_Upload_Url(const std::string& ChatId, const std::string& local_id, const std::string& url, const std::string& file_id);
+    static bool Update_File_Processed(const std::string& ChatId, const std::string& local_id, const std::string& lib_file_id, const std::string& file_id);
     static FileRef Get_File_Asset(const std::string& ChatId, const std::string& local_id);
     static InputBox Get_Input_Box(const std::string& ChatId);
     static void Add_Input(const std::string& input, const std::string& ChatId);

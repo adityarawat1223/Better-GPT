@@ -26,7 +26,7 @@ struct RenderBlock
     int numlines = 1;    
     float blockheight = 0.0f;
     float width_calculated_at = 1180.0f;
-    ChatMessage* ParentBlock;
+    ChatMessage* ParentBlock = nullptr;
 
 };
 

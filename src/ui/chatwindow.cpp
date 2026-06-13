@@ -32,6 +32,7 @@
 #include <QtConcurrent/QtConcurrent>
 #include <QTextDocument>
 #include <QRegularExpression>
+#include <QToolTip>
 #include <filesystem>
 #include <sstream>
 #include <iostream>
@@ -66,6 +67,28 @@ static QString StripCitations(const QString& text)
         QString(u"\u3010[^\u3011]*\u3011"));
     result.replace(bracketCite, "");
     return result.trimmed();
+}
+
+static std::string AssetCacheFilename(const FileRef& asset)
+{
+    std::filesystem::path original(asset.filename);
+    std::string extension = original.extension().string();
+
+    if (!asset.lib_file_id.empty())
+        return asset.lib_file_id + extension;
+
+    if (!asset.id.empty())
+        return asset.id + extension;
+
+    return asset.filename;
+}
+
+static bool HasVisibleMessageContent(const ChatMessage& msg)
+{
+    return !msg.blocks.empty() ||
+        !msg.assets.empty() ||
+        !msg.thinking.empty() ||
+        !msg.urls.empty();
 }
 
 // ---------------------------------------------------------------------------
@@ -239,7 +262,7 @@ void MessageLayoutBuilder::build(MessageLayout& layout, const ChatMessage& msg, 
     int maxImgHeight = 0;
 
     for (const auto& asset : msg.assets) {
-        std::filesystem::path cache_path = AppState::GetUserDir() / "cache" / asset.filename;
+        std::filesystem::path cache_path = AppState::GetUserDir() / "cache" / AssetCacheFilename(asset);
         QString pathStr = QString::fromStdString(cache_path.string()).replace("\\", "/");
 
         cache->ensureFileCached(pathStr, msg.message_id);
@@ -517,16 +540,16 @@ void MessageDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
             if (!block.thumbnail.isNull()) {
                 painter->drawPixmap(block.rect.topLeft(), block.thumbnail);
             }
-            else {
-                painter->setBrush(QColor("#2a2b30"));
-                painter->setPen(Qt::NoPen);
-                painter->drawRoundedRect(block.rect, 4, 4);
+        else {
+            painter->setBrush(QColor("#2a2b30"));
+            painter->setPen(Qt::NoPen);
+            painter->drawRoundedRect(block.rect, 4, 4);
 
-                painter->setPen(QColor("#555"));
-                painter->setFont(QFont("Segoe UI", 10));
-                painter->drawText(block.rect, Qt::AlignCenter, "Loading...");
-            }
-            break;
+            painter->setPen(QColor("#555"));
+            painter->setFont(QFont("Segoe UI", 10));
+            painter->drawText(block.rect, Qt::AlignCenter, "Loading image...");
+        }
+        break;
 
         case BlockType::File:
         {
@@ -604,6 +627,7 @@ bool MessageDelegate::editorEvent(QEvent* event, QAbstractItemModel* model,
                         int blockIdx = region.action.mid(16).toInt();
                         if (blockIdx >= 0 && blockIdx < msg.blocks.size()) {
                             QGuiApplication::clipboard()->setText(QString::fromStdString(msg.blocks[blockIdx].content));
+                            QToolTip::showText(me->globalPosition().toPoint(), "Text copied");
                         }
                     }
                     else {
@@ -651,7 +675,7 @@ ChatWindow::ChatWindow(const std::string& chatId, QWidget* parent)
         std::vector<ChatMessage> filteredMessages;
         filteredMessages.reserve(messages.size());
         for (const auto& msg : messages) {
-            if (!msg.is_system_or_tool) {
+            if (!msg.is_system_or_tool && HasVisibleMessageContent(msg)) {
                 filteredMessages.push_back(msg);
             }
         }
@@ -1047,7 +1071,10 @@ void ChatWindow::updateAttachmentsUI()
         pillLayout->setSpacing(4);
 
         QString statusText = "";
-        if (ref.uploadstatus == UploadStatus::Uploading) statusText = " (Uploading...)";
+        if (ref.uploadstatus == UploadStatus::Queued) statusText = " (Queued...)";
+        else if (ref.uploadstatus == UploadStatus::Uploading) statusText = " (Uploading...)";
+        else if (ref.uploadstatus == UploadStatus::Processing) statusText = " (Processing...)";
+        else if (ref.uploadstatus == UploadStatus::Ready || ref.uploadstatus == UploadStatus::Complete) statusText = " (Ready)";
         else if (ref.uploadstatus == UploadStatus::Failed) statusText = " (Failed)";
 
         QLabel* nameLabel = new QLabel(QString::fromStdString(ref.filename) + statusText, pill);
@@ -1080,7 +1107,7 @@ void ChatWindow::updateSendButtonState()
     Status status = Status::NotOpened;
     std::string errorText;
     if (AppState::GetChatStatus(m_chatId, status, errorText)) {
-        if (status == Status::ReqSent || status == Status::Parsing) {
+        if (status == Status::ReqSent || status == Status::ResRecieved || status == Status::Parsing) {
             isStreaming = true;
         }
     }
@@ -1090,7 +1117,11 @@ void ChatWindow::updateSendButtonState()
     auto assets = AppState::Get_Input_Box(m_chatId).assets;
     for (const auto& pair : assets) {
         hasAssets = true;
-        if (pair.second.uploadstatus == UploadStatus::Uploading) {
+        UploadStatus uploadStatus = pair.second.uploadstatus;
+        if (uploadStatus == UploadStatus::Queued ||
+            uploadStatus == UploadStatus::Uploading ||
+            uploadStatus == UploadStatus::Processing ||
+            uploadStatus == UploadStatus::Failed) {
             isUploading = true;
             break;
         }

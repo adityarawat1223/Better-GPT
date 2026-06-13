@@ -106,9 +106,11 @@ CefRefPtr<CefBrowser> AppState::GetHiddenBrowser() {
     return  m_token_info.HiddenBrowser;
 }
 bool AppState::HasMoreChats() {
+    std::lock_guard<std::mutex> lock(m_chat_list_mutex);
     return AppState::m_has_more_chats;
 }
 void AppState::SetHasMoreChats(bool hasMore) {
+    std::lock_guard<std::mutex> lock(m_chat_list_mutex);
     AppState::m_has_more_chats = hasMore;
 }
 void AppState::AddChatsToMap(const std::string& ChatId, std::vector<ChatMessage>& Txtarry) {
@@ -129,51 +131,52 @@ std::vector<ChatMessage> AppState::GetChatsFromMap(const std::string& ChatId) {
 }
 
 void AppState::AppendChatMessage(const std::string& ChatId, ChatMessage&& message) {
-    {
-        std::lock_guard<std::mutex> lock(m_messages_mutex);
-        auto it = ChatIdToText.find(ChatId);
-        if (it != ChatIdToText.end()) {
-            it->second.push_back(std::move(message));
-        }
-        else {
-            std::vector<ChatMessage> initial_messages;
-            initial_messages.push_back(std::move(message));
-            ChatIdToText[ChatId] = std::move(initial_messages);
-        }
-    }
-    // Emit signal AFTER releasing lock
-    emit EventDispatcher::instance()->chatMessageUpdated(ChatId);
+    UpsertChatMessage(ChatId, std::move(message));
 }
 
 void AppState::UpdateChatMessageById(const std::string& ChatId, ChatMessage&& message) {
+    UpsertChatMessage(ChatId, std::move(message));
+}
+
+bool AppState::UpsertChatMessage(const std::string& ChatId, ChatMessage&& message) {
+    bool updated = false;
     {
         std::lock_guard<std::mutex> lock(m_messages_mutex);
-        auto it = ChatIdToText.find(ChatId);
-        if (it != ChatIdToText.end() && !it->second.empty()) {
-            bool found = false;
-            for (auto& msg : it->second) {
-               
-                    if (msg.message_id == message.message_id) {
-                        msg = std::move(message);
-                        found = true;
-                        break;
-                    
-                }
-                // Fallback: if not found for some reason, append it (shouldn't happen if caller verified)
-                if (!found) {
-                    it->second.push_back(std::move(message));
-             
-                }
+        auto& messages = ChatIdToText[ChatId];
+
+        for (auto& existing : messages) {
+            if (existing.message_id == message.message_id) {
+                existing = std::move(message);
+                updated = true;
+                break;
             }
         }
-        else {
-            std::vector<ChatMessage> initial_messages;
-            initial_messages.push_back(std::move(message));
-            ChatIdToText[ChatId] = std::move(initial_messages);
+
+        if (!updated) {
+            messages.push_back(std::move(message));
         }
     }
-    // Emit signal AFTER releasing lock
+
     emit EventDispatcher::instance()->chatMessageUpdated(ChatId);
+    return updated;
+}
+
+bool AppState::InsertChatMessageIfMissing(const std::string& ChatId, ChatMessage&& message) {
+    {
+        std::lock_guard<std::mutex> lock(m_messages_mutex);
+        auto& messages = ChatIdToText[ChatId];
+
+        for (const auto& existing : messages) {
+            if (existing.message_id == message.message_id) {
+                return false;
+            }
+        }
+
+        messages.push_back(std::move(message));
+    }
+
+    emit EventDispatcher::instance()->chatMessageUpdated(ChatId);
+    return true;
 }
 
 std::set<std::string> AppState::GetOpenChats() {
@@ -303,13 +306,20 @@ int AppState::GetActiveSearchId()
 {
     return active_search_id.load();
 }
-void AppState::Update_Asset_Status(UploadStatus uploadstatus, const std::string& ChatId, const std::string& local_id) {
+bool AppState::Update_Asset_Status(UploadStatus uploadstatus, const std::string& ChatId, const std::string& local_id) {
     {
         std::lock_guard<std::mutex> lock(m_inputs_mutex);
-        ChatInputs[ChatId].assets[local_id].uploadstatus = uploadstatus;
+        auto chatIt = ChatInputs.find(ChatId);
+        if (chatIt == ChatInputs.end()) return false;
+
+        auto assetIt = chatIt->second.assets.find(local_id);
+        if (assetIt == chatIt->second.assets.end()) return false;
+
+        assetIt->second.uploadstatus = uploadstatus;
     }
     // Emit signal AFTER releasing lock
     emit EventDispatcher::instance()->assetsUpdated(ChatId, local_id);
+    return true;
 }
 
 
@@ -340,15 +350,34 @@ UploadStatus AppState::Get_Asset_Status(const std::string& ChatId, const std::st
             return it2->second.uploadstatus;
         }
     }
-    return static_cast<UploadStatus>(0); // Or whatever default makes sense
+    return UploadStatus::Failed;
 }
 
 
-void AppState::Update_Upload_Url(const std::string& ChatId, const std::string& local_id, const std::string& url, const std::string& file_id) {
+bool AppState::Update_Upload_Url(const std::string& ChatId, const std::string& local_id, const std::string& url, const std::string& file_id) {
     std::lock_guard<std::mutex> lock(m_inputs_mutex);
-    ChatInputs[ChatId].assets[local_id].upload_url = url;
-    ChatInputs[ChatId].assets[local_id].id = file_id;
-    
+    auto chatIt = ChatInputs.find(ChatId);
+    if (chatIt == ChatInputs.end()) return false;
+
+    auto assetIt = chatIt->second.assets.find(local_id);
+    if (assetIt == chatIt->second.assets.end()) return false;
+
+    assetIt->second.upload_url = url;
+    assetIt->second.id = file_id;
+    return true;
+}
+
+bool AppState::Update_File_Processed(const std::string& ChatId, const std::string& local_id, const std::string& lib_file_id, const std::string& file_id) {
+    std::lock_guard<std::mutex> lock(m_inputs_mutex);
+    auto chatIt = ChatInputs.find(ChatId);
+    if (chatIt == ChatInputs.end()) return false;
+
+    auto assetIt = chatIt->second.assets.find(local_id);
+    if (assetIt == chatIt->second.assets.end()) return false;
+
+    assetIt->second.lib_file_id = lib_file_id;
+    assetIt->second.id = file_id;
+    return true;
 }
 
 
@@ -365,7 +394,8 @@ FileRef AppState::Get_File_Asset(const std::string& ChatId, const std::string& l
 }
 InputBox AppState::Get_Input_Box(const std::string& ChatId) {
     std::lock_guard<std::mutex> lock(m_inputs_mutex);
-    return ChatInputs[ChatId];
+    auto it = ChatInputs.find(ChatId);
+    return it != ChatInputs.end() ? it->second : InputBox{};
 };
 void AppState::Add_Input(const std::string& input, const std::string& ChatId) {
     std::lock_guard<std::mutex> lock(m_inputs_mutex);
