@@ -3,7 +3,8 @@
 #include "Helpers/ReqRunner.h"
 #include "ui/EventDispatcher.h"
 #include <QTime>
-
+#include <QStandardItemModel>
+#include <QStandardItem>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QLabel>
@@ -389,6 +390,7 @@ void MessageLayoutBuilder::build(MessageLayout& layout, const ChatMessage& msg, 
         }
 
         if (block.type == BlockType::Code) {
+            b.lang = QString::fromStdString(block.lang);
             QString codeHtml = QString("<pre style=\"font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; color: #dcdcdc; margin: 0;\">%1</pre>")
                 .arg(QString::fromStdString(block.content).toHtmlEscaped());
             b.text = QStaticText(codeHtml);
@@ -547,10 +549,12 @@ void MessageDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
 
         case BlockType::Thinking:
             painter->setBrush(QColor("#090a0c"));
-            painter->setPen(QColor("#555861"));
+            painter->setPen(Qt::NoPen);
             painter->drawRoundedRect(block.rect, 4, 4);
+            painter->setBrush(QColor("#5a5d66"));
+            painter->drawRoundedRect(QRect(block.rect.x(), block.rect.y(), 3, block.rect.height()), 2, 2);
             painter->setPen(QColor("#a0a1a5"));
-            painter->drawStaticText(block.rect.topLeft() + QPoint(10, 10), block.text);
+            painter->drawStaticText(block.rect.topLeft() + QPoint(12, 10), block.text);
             break;
 
         case BlockType::Code:
@@ -565,6 +569,13 @@ void MessageDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
             headerPath.addRoundedRect(QRectF(block.rect.x(), block.rect.y(), block.rect.width(), 26), 6, 6);
             headerPath.addRect(block.rect.x(), block.rect.y() + 10, block.rect.width(), 16);
             painter->fillPath(headerPath.simplified(), QColor("#2d2d2d"));
+
+            // Language text
+            if (!block.lang.isEmpty()) {
+                painter->setPen(QColor("#a0a1a5"));
+                painter->setFont(QFont("Segoe UI", 8, QFont::Bold));
+                painter->drawText(QRect(block.rect.x() + 10, block.rect.y() + 4, 100, 18), Qt::AlignLeft | Qt::AlignVCenter, block.lang.toUpper());
+            }
 
             // Copy text
             painter->setPen(QColor("#aaaaaa"));
@@ -1012,6 +1023,22 @@ void ChatWindow::setupUi()
     m_modeDropdown->addItem("Search", static_cast<int>(Modes::search));
     m_modeDropdown->addItem("Deep Research" + formatLimit(u.deep_research_limit, u.deep_reset), static_cast<int>(Modes::deep_research));
     m_modeDropdown->addItem("Thinking", static_cast<int>(Modes::reason));
+
+    auto disableMode = [&](Modes mode) {
+        int idx = m_modeDropdown->findData(static_cast<int>(mode));
+        if (idx >= 0) {
+            auto* model = qobject_cast<QStandardItemModel*>(m_modeDropdown->model());
+            if (model) {
+                QStandardItem* item = model->item(idx);
+                if (item) {
+                    item->setEnabled(false);
+                    item->setToolTip("Work under construction");
+                }
+            }
+        }
+    };
+    disableMode(Modes::create_image);
+    disableMode(Modes::deep_research);
 
     Modes currentMode = AppState::Get_Input_Box(m_chatId).mode;
     int modeIdx = m_modeDropdown->findData(static_cast<int>(currentMode));

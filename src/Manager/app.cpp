@@ -52,6 +52,7 @@ int App::Run()
     int argc = 0;
     char* argv[] = { nullptr };
     QApplication a(argc, argv);
+    qRegisterMetaType<std::string>("std::string");
 
     // Apply Premium Dark Mode Stylesheet (QSS)
     QString stylesheet = R"(

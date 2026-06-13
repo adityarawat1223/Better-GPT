@@ -522,7 +522,7 @@ void MainChatWindow::onChatContextMenu(const QPoint& pos)
         QString newName = QInputDialog::getText(this, "Rename Chat",
             "Enter new name:", QLineEdit::Normal, chatTitle, &ok);
         if (ok && !newName.isEmpty()) {
-            ReqRunner::RenameChat(chatId, newName.toStdString());
+            ReqRunner::RenameChat(chatId, std::string(newName.toUtf8().constData()));
         }
     }
     else if (selected == deleteAction) {
@@ -539,7 +539,7 @@ void MainChatWindow::onLogoutClicked()
 {
     auto btn = QMessageBox::question(this, "Logout", "Are you sure you want to log out?", QMessageBox::Yes | QMessageBox::No);
     if (btn == QMessageBox::Yes) {
-        std::filesystem::remove_all("./cef_persistent_profile");
+        std::filesystem::remove_all(AppState::GetUserDir() / "cef_persistent_profile");
         QMessageBox::information(centralWidget(), "Logout", "Logged out successfully. Please restart application to log in again.");
     }
 }

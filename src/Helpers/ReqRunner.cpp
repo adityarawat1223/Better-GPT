@@ -173,6 +173,24 @@ cef_return_value_t ReqRunner::OnBeforeResourceLoad(
         return RV_CANCEL;
     }
    
+    if (url.find("/rename-sync") != std::string::npos)
+    {
+        std::string body = std::move(GetBody(request));
+        if (!body.empty()) {
+            RenameSync(body);
+        }
+        return RV_CANCEL;
+    }
+
+    if (url.find("/delete-sync") != std::string::npos)
+    {
+        std::string body = std::move(GetBody(request));
+        if (!body.empty()) {
+            DeleteSync(body);
+        }
+        return RV_CANCEL;
+    }
+   
     if (url.find("file-processed") != std::string::npos)
     {
         std::string body = std::move(GetBody(request));
@@ -466,6 +484,33 @@ void ReqRunner::MessageStreamSync(const std::string& body)
             << "[MessageStreamSync Error] "
             << e.what()
             << std::endl;
+    }
+}
+
+void ReqRunner::RenameSync(const std::string& body) {
+    try {
+        json data = json::parse(body);
+        if (data.is_object() && data.contains("chatId") && data.contains("newTitle")) {
+            std::string chatId = data["chatId"];
+            std::string newTitle = data["newTitle"];
+            AppState::RenameChatItem(chatId, newTitle);
+        }
+    }
+    catch (const std::exception& e) {
+        std::cerr << "[RenameSync Error] " << e.what() << std::endl;
+    }
+}
+
+void ReqRunner::DeleteSync(const std::string& body) {
+    try {
+        json data = json::parse(body);
+        if (data.is_object() && data.contains("chatId") && data.contains("success") && data["success"] == true) {
+            std::string chatId = data["chatId"];
+            AppState::DeleteChatItem(chatId);
+        }
+    }
+    catch (const std::exception& e) {
+        std::cerr << "[DeleteSync Error] " << e.what() << std::endl;
     }
 }
 

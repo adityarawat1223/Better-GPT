@@ -118,6 +118,8 @@ public:
     static void PfpDownload(const std::string & Url);
     static void FetchLibrary();
     static void MessageStreamSync(const std::string& body);
+    static void RenameSync(const std::string& body);
+    static void DeleteSync(const std::string& body);
     static void RenameChat(const std::string& chatId, const std::string& newName);
     static void DeleteChat(const std::string& chatId);
 

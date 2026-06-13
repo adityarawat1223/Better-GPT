@@ -42,6 +42,7 @@ struct LayoutBlock {
     QStaticText text;
     QPixmap thumbnail;
     QString action;
+    QString lang;
     bool cached = false;
 };
 
