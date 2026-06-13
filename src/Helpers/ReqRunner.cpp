@@ -36,6 +36,7 @@ using json = nlohmann::json;
 #include "Fileinit.h"
 #include "Serializer/MessageSerializer.h"
 #include "Scripts/ModelScript.h"
+#include <regex>
 
 
 static std::string GetBody(CefRefPtr<CefRequest> request) {
@@ -59,6 +60,26 @@ static std::string GetBody(CefRefPtr<CefRequest> request) {
     return body;
 }
 
+static std::string extractIdFromUrl(const std::string& url) {
+    std::regex id_regex("id=([^&]*)");
+    std::smatch match;
+
+    if (std::regex_search(url, match, id_regex)) {
+
+        return match[1].str();
+    }
+    
+    return ""; 
+};
+
+static std::string getExtensionFromMime(const std::string& mimeType) {
+    size_t slash_pos = mimeType.find('/');
+    if (slash_pos == std::string::npos || slash_pos == mimeType.length() - 1) {
+        return ""; 
+    }
+    
+    return mimeType.substr(slash_pos + 1);
+};
 ReqRunner::ReqRunner() {}
 
 
@@ -93,27 +114,17 @@ CefRefPtr<CefResponseFilter> ReqRunner::GetResourceResponseFilter(
         "https://chatgpt.com/backend-api/estuary/content?id")
         != std::string::npos)
     {
-        std::string disposition =
-            response->GetHeaderByName(
-                "content-disposition");
 
-        size_t start =
-            disposition.find("filename=\"");
+        std::string mimetype = getExtensionFromMime(response->GetHeaderByName("Content-type"));
+        std::string fileid = extractIdFromUrl(url);
+       
+        std::string filename = fileid + "." + mimetype;
 
-        std::string filename = "temp.bin";
-
-        if (start != std::string::npos)
-        {
-            start += 10;
-
-            size_t end =
-                disposition.find("\"", start);
-
-            filename =
-                disposition.substr(
-                    start,
-                    end - start);
+         if(fileid.empty() || mimetype.empty()){
+            filename = "temp.bin";
         }
+
+        
         return new FileParser(filename);
     }
     if (url.find("https://cdn.auth0.com/avatars/") != std::string::npos) {

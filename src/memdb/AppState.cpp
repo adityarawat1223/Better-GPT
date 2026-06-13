@@ -566,6 +566,7 @@ void AppState::UpdateChatStatus(const std::string& chatId, Status status, const 
     }
     // Emit signal AFTER releasing lock
     emit EventDispatcher::instance()->chatListUpdated();
+    emit EventDispatcher::instance()->chatMessageUpdated(chatId);
 }
 
 

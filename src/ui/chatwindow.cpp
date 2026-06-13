@@ -2,6 +2,7 @@
 #include "memdb/AppState.h"
 #include "Helpers/ReqRunner.h"
 #include "ui/EventDispatcher.h"
+#include <QTime>
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -69,18 +70,32 @@ static QString StripCitations(const QString& text)
     return result.trimmed();
 }
 
-static std::string AssetCacheFilename(const FileRef& asset)
+static std::filesystem::path AssetCachePath(const FileRef& asset)
 {
-    std::filesystem::path original(asset.filename);
-    std::string extension = original.extension().string();
-
-    if (!asset.lib_file_id.empty())
-        return asset.lib_file_id + extension;
+    std::filesystem::path cacheDir = AppState::GetUserDir() / "cache";
 
     if (!asset.id.empty())
-        return asset.id + extension;
+    {
+        std::filesystem::path exact = cacheDir / asset.id;
+        if (std::filesystem::exists(exact))
+            return exact;
 
-    return asset.filename;
+        std::error_code ec;
+        if (std::filesystem::exists(cacheDir, ec)) {
+            for (const auto& entry : std::filesystem::directory_iterator(cacheDir, ec)) {
+                if (ec) break;
+                if (!entry.is_regular_file(ec)) continue;
+
+                std::filesystem::path path = entry.path();
+                if (path.stem().string() == asset.id)
+                    return path;
+            }
+        }
+
+        return exact;
+    }
+
+    return cacheDir / asset.filename;
 }
 
 static bool HasVisibleMessageContent(const ChatMessage& msg)
@@ -187,7 +202,8 @@ CachedLayout& MessageLayoutCache::getLayout(const std::string& messageId)
 
 void MessageLayoutCache::ensureFileCached(const QString& absolutePath, const std::string& messageId)
 {
-    if (m_fileStatus.contains(absolutePath) || m_pendingFiles.contains(absolutePath)) {
+    if ((m_fileStatus.contains(absolutePath) && m_fileStatus.value(absolutePath)) ||
+        m_pendingFiles.contains(absolutePath)) {
         return;
     }
 
@@ -199,17 +215,9 @@ void MessageLayoutCache::ensureFileCached(const QString& absolutePath, const std
         QImage loadedImage;  // QImage is safe on worker threads; QPixmap is NOT
 
         if (exists) {
-            bool is_image = absolutePath.endsWith(".png", Qt::CaseInsensitive) ||
-                absolutePath.endsWith(".jpg", Qt::CaseInsensitive) ||
-                absolutePath.endsWith(".jpeg", Qt::CaseInsensitive) ||
-                absolutePath.endsWith(".webp", Qt::CaseInsensitive) ||
-                absolutePath.endsWith(".gif", Qt::CaseInsensitive);
-
-            if (is_image) {
-                if (loadedImage.load(absolutePath)) {
-                    if (!loadedImage.isNull() && loadedImage.width() > 0 && loadedImage.height() > 0) {
-                        loadedImage = loadedImage.scaled(160, 120, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-                    }
+            if (loadedImage.load(absolutePath)) {
+                if (!loadedImage.isNull() && loadedImage.width() > 0 && loadedImage.height() > 0) {
+                    loadedImage = loadedImage.scaled(640, 480, Qt::KeepAspectRatio, Qt::SmoothTransformation);
                 }
             }
         }
@@ -223,9 +231,11 @@ void MessageLayoutCache::ensureFileCached(const QString& absolutePath, const std
                 m_thumbnails[absolutePath] = QPixmap::fromImage(loadedImage);
             }
 
-            invalidateRow(messageId);
-            if (onLayoutInvalidated) {
-                onLayoutInvalidated(messageId);
+            if (exists) {
+                invalidateRow(messageId);
+                if (onLayoutInvalidated) {
+                    onLayoutInvalidated(messageId);
+                }
             }
             }, Qt::QueuedConnection);
         });
@@ -257,12 +267,22 @@ void MessageLayoutBuilder::build(MessageLayout& layout, const ChatMessage& msg, 
     int maxWidth = std::min(maxBubbleArea, 980) - 28;
 
     // Process assets
-    bool hasImages = false;
     int imgX = 0;
-    int maxImgHeight = 0;
+    int imgRowY = currentY;
+    int imgRowHeight = 0;
+    bool hasImageRow = false;
+
+    auto flushImageRow = [&]() {
+        if (!hasImageRow) return;
+        currentY = imgRowY + imgRowHeight + 8;
+        imgX = 0;
+        imgRowY = currentY;
+        imgRowHeight = 0;
+        hasImageRow = false;
+        };
 
     for (const auto& asset : msg.assets) {
-        std::filesystem::path cache_path = AppState::GetUserDir() / "cache" / AssetCacheFilename(asset);
+        std::filesystem::path cache_path = AssetCachePath(asset);
         QString pathStr = QString::fromStdString(cache_path.string()).replace("\\", "/");
 
         cache->ensureFileCached(pathStr, msg.message_id);
@@ -275,27 +295,50 @@ void MessageLayoutBuilder::build(MessageLayout& layout, const ChatMessage& msg, 
             asset.filename.find(".webp") != std::string::npos ||
             asset.filename.find(".gif") != std::string::npos;
 
-        if (is_image && cached) {
-            hasImages = true;
+        if (is_image) {
             QPixmap thumb = cache->getThumbnail(pathStr);
-            int tw = thumb.isNull() ? 160 : thumb.width();
-            int th = thumb.isNull() ? 120 : thumb.height();
+            int sourceW = asset.width > 0 ? asset.width : (thumb.isNull() ? 360 : thumb.width());
+            int sourceH = asset.height > 0 ? asset.height : (thumb.isNull() ? 220 : thumb.height());
+
+            int maxImageWidth = std::min(maxWidth, 520);
+            int maxImageHeight = 420;
+            double scale = std::min({
+                1.0,
+                static_cast<double>(maxImageWidth) / std::max(1, sourceW),
+                static_cast<double>(maxImageHeight) / std::max(1, sourceH)
+                });
+
+            int tw = std::max(180, static_cast<int>(sourceW * scale));
+            int th = std::max(120, static_cast<int>(sourceH * scale));
+
+            if (imgX > 0 && imgX + tw > maxWidth) {
+                flushImageRow();
+            }
 
             LayoutBlock b;
             b.type = BlockType::Image;
-            b.thumbnail = thumb;
-            b.rect = QRect(imgX, currentY, tw, th);
+            b.thumbnail = (!thumb.isNull() && cached)
+                ? thumb.scaled(tw, th, Qt::KeepAspectRatio, Qt::SmoothTransformation)
+                : QPixmap();
+            b.rect = QRect(imgX, imgRowY, tw, th);
+            b.action = QString("action:file:%1:%2").arg(QString::fromStdString(asset.id), pathStr);
+            b.cached = cached;
             layout.blocks.push_back(b);
+            layout.clickRegions.append({ b.rect, b.action });
 
             imgX += tw + 8;
-            maxImgHeight = std::max(maxImgHeight, th);
+            imgRowHeight = std::max(imgRowHeight, th);
+            maxBlockWidth = std::max(maxBlockWidth, imgX - 8);
+            hasImageRow = true;
         }
         else {
+            flushImageRow();
+
             LayoutBlock b;
             b.type = BlockType::File;
             b.action = QString("action:file:%1:%2").arg(QString::fromStdString(asset.id), pathStr);
             b.cached = cached;
-            QString labelText = cached ? QString::fromStdString(asset.filename)
+            QString labelText = cached ? QString("%1 - Open").arg(QString::fromStdString(asset.filename))
                 : QString("%1 (%2 KB) - Download").arg(QString::fromStdString(asset.filename), QString::number(asset.size_bytes / 1024.0, 'f', 1));
 
             b.text = QStaticText(labelText);
@@ -312,10 +355,7 @@ void MessageLayoutBuilder::build(MessageLayout& layout, const ChatMessage& msg, 
         }
     }
 
-    if (hasImages) {
-        currentY += maxImgHeight + 8;
-        maxBlockWidth = std::max(maxBlockWidth, imgX);
-    }
+    flushImageRow();
 
     if (!msg.thinking.empty()) {
         LayoutBlock b;
@@ -537,19 +577,25 @@ void MessageDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
         }
 
         case BlockType::Image:
-            if (!block.thumbnail.isNull()) {
-                painter->drawPixmap(block.rect.topLeft(), block.thumbnail);
-            }
-        else {
-            painter->setBrush(QColor("#2a2b30"));
-            painter->setPen(Qt::NoPen);
-            painter->drawRoundedRect(block.rect, 4, 4);
+        {
+            painter->setPen(QPen(QColor("#2f3137"), 1));
+            painter->setBrush(QColor("#111214"));
+            painter->drawRoundedRect(block.rect, 8, 8);
 
-            painter->setPen(QColor("#555"));
-            painter->setFont(QFont("Segoe UI", 10));
-            painter->drawText(block.rect, Qt::AlignCenter, "Loading image...");
+            if (!block.thumbnail.isNull()) {
+                QPoint imageTopLeft(
+                    block.rect.x() + (block.rect.width() - block.thumbnail.width()) / 2,
+                    block.rect.y() + (block.rect.height() - block.thumbnail.height()) / 2
+                );
+                painter->drawPixmap(imageTopLeft, block.thumbnail);
+            }
+            else {
+                painter->setPen(QColor("#7d8087"));
+                painter->setFont(QFont("Segoe UI", 10));
+                painter->drawText(block.rect, Qt::AlignCenter, block.cached ? "Loading image..." : "Download image");
+            }
+            break;
         }
-        break;
 
         case BlockType::File:
         {
@@ -655,6 +701,8 @@ void MessageDelegate::handleAction(const QString& action) const
             }
             else {
                 ReqRunner::FileExecution(assetId);
+                m_cache.invalidateAll();
+               
             }
         }
     }
@@ -671,12 +719,45 @@ ChatWindow::ChatWindow(const std::string& chatId, QWidget* parent)
     m_updateTimer->setSingleShot(true);
     connect(m_updateTimer, &QTimer::timeout, this, [this]() {
         std::vector<ChatMessage> messages = AppState::GetChatsFromMap(m_chatId);
-        if (messages.empty()) return;
         std::vector<ChatMessage> filteredMessages;
         filteredMessages.reserve(messages.size());
         for (const auto& msg : messages) {
             if (!msg.is_system_or_tool && HasVisibleMessageContent(msg)) {
                 filteredMessages.push_back(msg);
+            }
+        }
+
+        Status currentStatus = Status::NotOpened;
+        std::string err;
+        if (AppState::GetChatStatus(m_chatId, currentStatus, err)) {
+            if (currentStatus == Status::ReqSent || currentStatus == Status::Parsing) {
+                bool needsPlaceholder = true;
+                if (!filteredMessages.empty() && !filteredMessages.back().user) {
+                    if (!filteredMessages.back().raw_content.empty() || !filteredMessages.back().blocks.empty()) {
+                         needsPlaceholder = false;
+                    }
+                }
+                if (needsPlaceholder) {
+                    ChatMessage dummyMsg;
+                    dummyMsg.user = false;
+                    dummyMsg.message_id = "dummy_status_msg";
+                    
+                    int dotCount = (QTime::currentTime().msec() / 250) % 4;
+                    std::string dots = std::string(dotCount, '.');
+                    
+                    std::string statusText = "Thinking";
+                    if (currentStatus == Status::ReqSent) statusText = "Request Sent";
+                    else if (currentStatus == Status::Parsing) statusText = "Parsing Response";
+                    
+                    RenderBlock rb;
+                    rb.type = BlockType::Text;
+                    rb.content = "_" + statusText + dots + "_";
+                    dummyMsg.blocks.push_back(rb);
+                    dummyMsg.is_system_or_tool = false;
+                    
+                    filteredMessages.push_back(dummyMsg);
+                    m_updateTimer->start();
+                }
             }
         }
 
@@ -718,7 +799,12 @@ ChatWindow::ChatWindow(const std::string& chatId, QWidget* parent)
         });
 
     connect(EventDispatcher::instance(), &EventDispatcher::chatMessageUpdated, this, [this](const std::string& id) {
-        if (id == m_chatId) updateMessages();
+        if (id == m_chatId) {
+            if (messageDelegate) {
+                messageDelegate->invalidateAll();
+            }
+            updateMessages();
+        }
         });
     connect(EventDispatcher::instance(), &EventDispatcher::chatListUpdated, this, &ChatWindow::updateStatus);
 
@@ -1012,6 +1098,11 @@ void ChatWindow::onSendClicked()
     {
         ReqRunner::Send_Message(m_chatId, text.toUtf8().constData());
         inputEdit->clear();
+        
+        QMetaObject::invokeMethod(this, [this]() {
+            QScrollBar* sb = listView->verticalScrollBar();
+            sb->setValue(sb->maximum());
+        }, Qt::QueuedConnection);
     }
 }
 
@@ -1107,7 +1198,7 @@ void ChatWindow::updateSendButtonState()
     Status status = Status::NotOpened;
     std::string errorText;
     if (AppState::GetChatStatus(m_chatId, status, errorText)) {
-        if (status == Status::ReqSent || status == Status::ResRecieved || status == Status::Parsing) {
+        if (status == Status::ReqSent || status == Status::Parsing) {
             isStreaming = true;
         }
     }
@@ -1131,9 +1222,15 @@ void ChatWindow::updateSendButtonState()
 
     if (isStreaming || isUploading || isEmpty) {
         m_sendBtn->setDisabled(true);
+        if (isStreaming) {
+            inputEdit->setPlaceholderText("Please wait for response...");
+        } else {
+            inputEdit->setPlaceholderText("Type your message...");
+        }
     }
     else {
         m_sendBtn->setDisabled(false);
+        inputEdit->setPlaceholderText("Type your message...");
     }
 }
 

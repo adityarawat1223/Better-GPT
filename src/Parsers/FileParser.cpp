@@ -4,6 +4,7 @@
 #include <iostream>
 #include <filesystem>
 #include "memdb/AppState.h"
+#include "ui/EventDispatcher.h"
 namespace fs = std::filesystem;
 
 FileParser::FileParser(const std::string& name)
@@ -89,5 +90,9 @@ FileParser::~FileParser()
     {
         out_file.flush();
         out_file.close();
+
+        for (const auto& chatId : AppState::GetOpenChats()) {
+            emit EventDispatcher::instance()->chatMessageUpdated(chatId);
+        }
     }
 }

@@ -181,6 +181,13 @@ static std::string generate_secure_chat_id() {
             json::array({ "reason" });
     }
 
+     if (input.mode == Modes::create_image)
+    {
+        message["metadata"]["system_hints"] =
+            json::array({ "picture_v2" });
+    }
+
+
     json root;
 
     root["action"] =
@@ -216,10 +223,16 @@ static std::string generate_secure_chat_id() {
     root["enable_message_followups"] =
         true;
 
-    root["system_hints"] =
+    if(input.mode == Modes::reason || input.mode == Modes::create_image){
+        root["system_hints"] =
         input.mode == Modes::reason
         ? json::array({ "reason" })
-        : json::array();
+        : json::array({"picture_v2"});
+    }
+
+    else{
+    root["system_hints"] = json::array();
+    }
 
     root["supports_buffering"] =
         true;
