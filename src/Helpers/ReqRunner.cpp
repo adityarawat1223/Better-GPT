@@ -98,6 +98,10 @@ CefRefPtr<CefResponseFilter> ReqRunner::GetResourceResponseFilter(
     if (url.find("/backend-api/conversation/") != std::string::npos)
         return new ChatTextParser();
 
+    if (url.find("/backend-api/conversations?") != std::string::npos) {
+        return new ChatListParser(nullptr, url);
+    }
+
     if (url.find("https://chatgpt.com/backend-api/files/download/file") != std::string::npos) {
         return new FileLinkParser();
     }
@@ -402,8 +406,7 @@ void ReqRunner::MessageStreamSync(const std::string& body)
                 AppState::AddChat(chat_id);
                 std::cout << "[MessageStreamSync] New chat detected: " << chat_id << std::endl;
             }
-            // Fetch chat details using ChatExecScript so the server-assigned title gets loaded via ChatTextParser
-            ChatExecScript(chat_id);
+           
         }
 
         if (j.contains("final_message_id") && j["final_message_id"].is_string()) {
@@ -476,6 +479,13 @@ void ReqRunner::MessageStreamSync(const std::string& body)
             Santizer(msg, assistant_content);
 
             AppState::UpsertChatMessage(chat_id, std::move(msg));
+        }
+
+        // When stream is completely finished, fetch the chat list to update the native titles
+        if (j.contains("is_complete") && j["is_complete"].is_boolean()) {
+            if (j["is_complete"].get<bool>()) {
+                ReqRunner::FetchChatList(0);
+            }
         }
     }
     catch (const std::exception& e)

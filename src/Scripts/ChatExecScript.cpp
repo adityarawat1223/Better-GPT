@@ -48,20 +48,6 @@ void ChatExecScript(const std::string &ChatId) {
             const text = await response.text();
             console.log(chatId);
 
-            // Extract title and sync back to C++
-            try {
-                const data = JSON.parse(text);
-                if (data.title && typeof data.title === 'string') {
-                    fetch('https://chatgpt.com/rename-sync', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ chatId: chatId, newTitle: data.title })
-                    }).catch(e => {});
-                }
-            } catch (e) {
-                console.error('Failed to parse chat json for title:', e);
-            }
-
         } catch (err) {
             fetch('https://chatgpt.com/status-sync', {
                 method: 'POST',
