@@ -1,12 +1,12 @@
 # Better-GPT
 
-![Better-GPT Screenshot](assets/home.jpg)
-![Better-GPT Screenshot](assets/Perf Pic.jpg)
-![Better-GPT Screenshot](assets/New Chat.jpg)
+![Better-GPT Screenshot](assets/Home.jpg)
+![Better-GPT Screenshot](assets/Perf%20Pic.jpg)
+![Better-GPT Screenshot](assets/New%20Chat.jpg)
 
 This is a Windows Native Client Made Using C++20, Qt 6 and CEF (chromium Embedded Worker)
 Its More Optimized compared To native Electron Apps , Most of The Memory OverHead would be User Payload (User Chat in memory and User Files Cached On their Disk) At current Benchmarks this App Is More Superior compared to official Electron App , Once 
-## ✨ Features
+##  Features
 
 - **MultiTasking**: Work at Multiple Large Chats at same time ,without worrying about Perfomance 
 
@@ -31,7 +31,7 @@ Upcoming Features :-
 - **OS**: Windows (Utilizing `winhttp`, `dwmapi`, `user32`)
 - **Compiler**: MSVC 2022
 
-## 🚀 Building from Source
+##  Building from Source
 
 ### Prerequisites
 
