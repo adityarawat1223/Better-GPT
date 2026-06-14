@@ -1,37 +1,47 @@
 #include "AppState.h"
 #include <iostream>
 #include "ui/EventDispatcher.h"
+
+
 void AppState::SetTokenInfo(const TokenInfo& info) {
     std::lock_guard<std::mutex> lock(m_auth_mutex);
     m_token_info = info;
 }
+
+
 std::string AppState::GetTokenInfo() {
     std::lock_guard<std::mutex> lock(m_auth_mutex);
     return m_token_info.bearertoken;
 }
+
+
 void AppState::UpdateBearerToken(const std::string& token) {
     std::lock_guard<std::mutex> lock(m_auth_mutex);
     m_token_info.bearertoken = token;
 }
+
+
 void AppState::UpdateBrowserInstance(CefRefPtr<CefBrowser> browser) {
     std::lock_guard<std::mutex> lock(m_auth_mutex);
     m_token_info.mainBrowser = browser;
 }
+
+
 void AppState::UpdateHiddenBrowser(CefRefPtr<CefBrowser> browser) {
     std::lock_guard<std::mutex> lock(m_auth_mutex);
     m_token_info.HiddenBrowser = browser;
 }
+
+
 void AppState::SetChatList(std::vector<ChatItem> fresh_list) {
     {
         std::lock_guard<std::mutex> lock(m_chat_list_mutex);
-        // Build set of incoming IDs to prune stale chats that were deleted on the server.
-        // We keep any chat that is currently open (open_chats) even if not in the fresh list,
-        // so in-flight conversations don't disappear from the map.
         std::unordered_set<std::string> incoming_ids;
         incoming_ids.reserve(fresh_list.size());
+
         for (const auto& item : fresh_list)
             incoming_ids.insert(item.id);
-        // Erase chats that are gone from the server and not currently open
+
         for (auto it = m_chat_map.begin(); it != m_chat_map.end(); ) {
             if (incoming_ids.find(it->first) == incoming_ids.end() &&
                 open_chats.find(it->first) == open_chats.end()) {
@@ -41,7 +51,6 @@ void AppState::SetChatList(std::vector<ChatItem> fresh_list) {
                 ++it;
             }
         }
-        // Merge: preserve runtime state (tokens, inputbox, streaming)
         for (auto& item : fresh_list) {
             auto it = m_chat_map.find(item.id);
             if (it != m_chat_map.end()) {
@@ -54,6 +63,7 @@ void AppState::SetChatList(std::vector<ChatItem> fresh_list) {
     }
     emit EventDispatcher::instance()->chatListUpdated();
 }
+
 void AppState::AppendChatList(const std::vector<ChatItem>& list) {
     {
         std::lock_guard<std::mutex> lock(m_chat_list_mutex);
@@ -69,9 +79,12 @@ void AppState::AppendChatList(const std::vector<ChatItem>& list) {
     }
     emit EventDispatcher::instance()->chatListUpdated();
 }
+
+
 std::vector<ChatItem> AppState::GetChatListCopy() {
     std::lock_guard<std::mutex> lock(m_chat_list_mutex);
     std::vector<ChatItem> list;
+
     list.reserve(m_chat_map.size());
     for (const auto& pair : m_chat_map) {
         list.push_back(pair.second);
@@ -81,12 +94,13 @@ std::vector<ChatItem> AppState::GetChatListCopy() {
         });
     return list;
 }
+
+
 void AppState::AppendChatItem(const ChatItem& item) {
     {
         std::lock_guard<std::mutex> lock(m_chat_list_mutex);
         m_chat_map[item.id] = item;
     }
-    // Emit signal AFTER releasing lock
     emit EventDispatcher::instance()->chatListUpdated();
 }
 void AppState::ClearChatList() {
@@ -94,31 +108,40 @@ void AppState::ClearChatList() {
         std::lock_guard<std::mutex> lock(m_chat_list_mutex);
         m_chat_map.clear();
     }
-    // Emit signal AFTER releasing lock
+
     emit EventDispatcher::instance()->chatListUpdated();
 }
+
+
 CefRefPtr<CefBrowser> AppState::GetMainBrowser() {
     std::lock_guard<std::mutex> lock(m_auth_mutex);
     return  m_token_info.mainBrowser;
 }
+
+
 CefRefPtr<CefBrowser> AppState::GetHiddenBrowser() {
     std::lock_guard<std::mutex> lock(m_auth_mutex);
     return  m_token_info.HiddenBrowser;
 }
+
+
 bool AppState::HasMoreChats() {
     std::lock_guard<std::mutex> lock(m_chat_list_mutex);
     return AppState::m_has_more_chats;
 }
+
+
 void AppState::SetHasMoreChats(bool hasMore) {
     std::lock_guard<std::mutex> lock(m_chat_list_mutex);
     AppState::m_has_more_chats = hasMore;
 }
+
 void AppState::AddChatsToMap(const std::string& ChatId, std::vector<ChatMessage>& Txtarry) {
     {
         std::lock_guard<std::mutex> lock(m_messages_mutex);
         ChatIdToText[ChatId] = std::move(Txtarry);
     }
-    // Emit signal AFTER releasing lock
+
     emit EventDispatcher::instance()->chatMessageUpdated(ChatId);
 }
 std::vector<ChatMessage> AppState::GetChatsFromMap(const std::string& ChatId) {
@@ -129,29 +152,30 @@ std::vector<ChatMessage> AppState::GetChatsFromMap(const std::string& ChatId) {
     }
     return {};
 }
+// old design
+// void AppState::AppendChatMessage(const std::string& ChatId, ChatMessage&& message) {
+//     UpsertChatMessage(ChatId, std::move(message));
+// }
 
-void AppState::AppendChatMessage(const std::string& ChatId, ChatMessage&& message) {
-    UpsertChatMessage(ChatId, std::move(message));
-}
-
-void AppState::UpdateChatMessageById(const std::string& ChatId, ChatMessage&& message) {
-    UpsertChatMessage(ChatId, std::move(message));
-}
+// void AppState::UpdateChatMessageById(const std::string& ChatId, ChatMessage&& message) {
+//     UpsertChatMessage(ChatId, std::move(message));
+// }
 
 bool AppState::UpsertChatMessage(const std::string& ChatId, ChatMessage&& message) {
     bool updated = false;
     {
         std::lock_guard<std::mutex> lock(m_messages_mutex);
         auto& messages = ChatIdToText[ChatId];
+        size_t sz = messages.size();
 
-        for (auto& existing : messages) {
+        for(size_t i = sz - 1 ; i >= 0 ; i--){
+            auto &existing = messages[i];
             if (existing.message_id == message.message_id) {
                 existing = std::move(message);
                 updated = true;
                 break;
             }
         }
-
         if (!updated) {
             messages.push_back(std::move(message));
         }
@@ -162,11 +186,15 @@ bool AppState::UpsertChatMessage(const std::string& ChatId, ChatMessage&& messag
 }
 
 bool AppState::InsertChatMessageIfMissing(const std::string& ChatId, ChatMessage&& message) {
+    
     {
         std::lock_guard<std::mutex> lock(m_messages_mutex);
         auto& messages = ChatIdToText[ChatId];
+        size_t sz = messages.size();
 
-        for (const auto& existing : messages) {
+        
+        for(size_t i = sz - 1 ; i >= 0 ; i--){
+            auto &existing = messages[i];
             if (existing.message_id == message.message_id) {
                 return false;
             }
@@ -183,38 +211,42 @@ std::set<std::string> AppState::GetOpenChats() {
     std::lock_guard<std::mutex> lock(m_chat_list_mutex);
     return open_chats;
 }
+
 void AppState::CloseChat(const std::string& ChatId) {
     {
         std::lock_guard<std::mutex> lock(m_chat_list_mutex);
         open_chats.erase(ChatId);
     }
-    // Emit signal AFTER releasing lock
     emit EventDispatcher::instance()->chatListUpdated();
 }
+
 void AppState::AddChat(const std::string& ChatId) {
     {
         std::lock_guard<std::mutex> lock(m_chat_list_mutex);
         open_chats.insert(ChatId);
     }
-    // Emit signal AFTER releasing lock
     emit EventDispatcher::instance()->chatListUpdated();
 }
+
+
 bool AppState::HasChatData(const std::string& ChatId) {
-    // Returns true only if the chat has at least one message loaded.
+
     std::lock_guard<std::mutex> lock(m_messages_mutex);
     auto it = ChatIdToText.find(ChatId);
     return it != ChatIdToText.end() && !it->second.empty();
 }
+
 bool AppState::HasChatEntry(const std::string& ChatId) {
-    // Returns true if the chat key exists in the map (even if messages are empty).
-    // Use this to check if a chat was registered (e.g. temp new chat).
+   
     std::lock_guard<std::mutex> lock(m_messages_mutex);
     return ChatIdToText.find(ChatId) != ChatIdToText.end();
 }
+
 void AppState::UpdateHeaders(const std::string& key, std::string& value) {
     std::lock_guard<std::mutex> lock(m_auth_mutex);
     headers[key] = std::move(value);
 }
+
 std::string AppState::GetHeaders(const std::string& key)
 {
     std::lock_guard<std::mutex> lock(m_auth_mutex);
@@ -225,30 +257,37 @@ std::string AppState::GetHeaders(const std::string& key)
     }
     return "";
 }
+
 std::set<Models> AppState::GetModels() {
     std::lock_guard<std::mutex> lock(m_models_mutex);
     return ModelsInfo;
 }
+
 void AppState::AddModels(const Models& md) {
     std::lock_guard<std::mutex> lock(m_models_mutex);
     ModelsInfo.insert(md);
 };
+
+
 void AppState::Set_Default_Model(std::string& model) {
     std::lock_guard<std::mutex> lock(m_user_mutex);
     user.default_model = std::move(model);
 }
+
 std::string AppState::Get_Default_Model() {
     std::lock_guard<std::mutex> lock(m_user_mutex);
     return user.default_model;
 };
+
 void AppState::Add_File_Asset(const FileRef& fileref, const std::string& ChatId, const std::string& local_id) {
     {
         std::lock_guard<std::mutex> lock(m_inputs_mutex);
         ChatInputs[ChatId].assets[local_id] = (fileref);
     }
-    // Emit signal AFTER releasing lock
     emit EventDispatcher::instance()->assetsUpdated(ChatId, local_id);
 }
+
+
 void AppState::Remove_File_Asset(const FileRef& fileref, const std::string& ChatId, const std::string& local_id) {
     {
         std::lock_guard<std::mutex> lock(m_inputs_mutex);
@@ -256,6 +295,8 @@ void AppState::Remove_File_Asset(const FileRef& fileref, const std::string& Chat
     }
     emit EventDispatcher::instance()->assetsUpdated(ChatId, local_id);
 }
+
+
 void AppState::Clear_Input_Assets(const std::string& ChatId) {
     {
         std::lock_guard<std::mutex> lock(m_inputs_mutex);
@@ -273,6 +314,8 @@ void AppState::Add_Job(const FileRef& body)
     }
     UploadCV.notify_one();
 }
+
+
 bool AppState::Pop_Job(FileRef& out)
 {
     std::unique_lock<std::mutex> lock(m_queue_mutex);
@@ -284,6 +327,8 @@ bool AppState::Pop_Job(FileRef& out)
     UploadQueue.pop();
     return true;
 }
+
+
 void AppState::Submit_Search_Job(const std::string& query, const std::vector<std::string>& chatIds)
 {
     std::lock_guard<std::mutex> lock(m_search_mutex);
@@ -294,6 +339,8 @@ void AppState::Submit_Search_Job(const std::string& query, const std::vector<std
     CurrentSearchJob = job;
     SearchCV.notify_one();
 }
+
+
 bool AppState::Pop_Search_Job(SearchJob& out)
 {
     std::unique_lock<std::mutex> lock(m_search_mutex);
@@ -302,10 +349,14 @@ bool AppState::Pop_Search_Job(SearchJob& out)
     CurrentSearchJob.reset();
     return true;
 }
+
+
 int AppState::GetActiveSearchId()
 {
     return active_search_id.load();
 }
+
+
 bool AppState::Update_Asset_Status(UploadStatus uploadstatus, const std::string& ChatId, const std::string& local_id) {
     {
         std::lock_guard<std::mutex> lock(m_inputs_mutex);
@@ -317,7 +368,6 @@ bool AppState::Update_Asset_Status(UploadStatus uploadstatus, const std::string&
 
         assetIt->second.uploadstatus = uploadstatus;
     }
-    // Emit signal AFTER releasing lock
     emit EventDispatcher::instance()->assetsUpdated(ChatId, local_id);
     return true;
 }
@@ -328,9 +378,9 @@ void AppState::Set_Parent(const std::string& ChatId, const std::string& Pid) {
     std::lock_guard<std::mutex> lock(m_inputs_mutex);
     Chat_Parent_Id[ChatId] = Pid;
 }
+
 std::string AppState::Get_Parent(const std::string& ChatId) {
     std::lock_guard<std::mutex> lock(m_inputs_mutex);
-    // Use find() — operator[] would silently insert an empty entry
     auto it = Chat_Parent_Id.find(ChatId);
     return it != Chat_Parent_Id.end() ? it->second : "";
 }
@@ -341,6 +391,7 @@ void AppState::Update_Model(const std::string& model, const std::string& chat_id
     ChatInputs[chat_id].model = model;
     
 }
+
 UploadStatus AppState::Get_Asset_Status(const std::string& ChatId, const std::string& Local_id) {
     std::lock_guard<std::mutex> lock(m_inputs_mutex);
     auto it1 = ChatInputs.find(ChatId);
@@ -390,19 +441,20 @@ FileRef AppState::Get_File_Asset(const std::string& ChatId, const std::string& l
             return it2->second;
         }
     }
-    return FileRef(); // Return empty FileRef
+    return FileRef(); 
 }
+
 InputBox AppState::Get_Input_Box(const std::string& ChatId) {
     std::lock_guard<std::mutex> lock(m_inputs_mutex);
     auto it = ChatInputs.find(ChatId);
     return it != ChatInputs.end() ? it->second : InputBox{};
 };
+
 void AppState::Add_Input(const std::string& input, const std::string& ChatId) {
     std::lock_guard<std::mutex> lock(m_inputs_mutex);
     ChatInputs[ChatId].content = input;
     
 }
-
 
 void AppState::Update_User_Info(std::string& profurl, std::string& name, std::int64_t& created_at, std::string& email, std::string& user_id) {
     std::lock_guard<std::mutex> lock(m_user_mutex);
@@ -412,6 +464,7 @@ void AppState::Update_User_Info(std::string& profurl, std::string& name, std::in
     user.created_at = std::move(created_at);
     user.user_id = std::move(user_id);
 }
+
 std::string AppState::Get_User_ID() {
     std::lock_guard<std::mutex> lock(m_user_mutex);
     return user.user_id;
@@ -434,22 +487,27 @@ std::filesystem::path AppState::GetUserDir() {
     throw std::runtime_error("Failed to determine config directory");
 #endif
 }
+
 void AppState::SetLibrary(std::vector<FileRef>& new_lib) {
     std::lock_guard<std::mutex> lock(m_library_mutex);
     library = std::move(new_lib);
 }
+
 std::vector<FileRef>AppState::GetLibrary() {
     std::lock_guard<std::mutex> lock(m_library_mutex);
     return library;
 }
+
 void AppState::RemoveLibraryItem(const std::string& fileId) {
     std::lock_guard<std::mutex> lock(m_library_mutex);
     library.erase(std::remove_if(library.begin(), library.end(), [&](const FileRef& a) { return a.id == fileId; }), library.end());
 }
+
 User AppState::Get_User() {
     std::lock_guard<std::mutex> lock(m_user_mutex);
     return user;
 }
+
 void AppState::Update_User_Feature_Limit(const std::string& featurename, int remaining, int64_t reset_time) {
     std::lock_guard<std::mutex> lock(m_user_mutex);
     if (featurename == "deep_research") {
@@ -469,10 +527,12 @@ void AppState::Update_User_Feature_Limit(const std::string& featurename, int rem
         user.image_gen_reset = reset_time;
     }
 }
+
 size_t AppState::GetChatCount() {
     std::lock_guard<std::mutex> lock(m_chat_list_mutex);
     return m_chat_map.size();
 }
+
 void AppState::RenameChatItem(const std::string& chatId, const std::string& newTitle) {
     {
         std::lock_guard<std::mutex> lock(m_chat_list_mutex);
@@ -483,6 +543,7 @@ void AppState::RenameChatItem(const std::string& chatId, const std::string& newT
     }
     emit EventDispatcher::instance()->chatListUpdated();
 }
+
 std::string AppState::GetChatTitle(const std::string& chatId) {
     std::lock_guard<std::mutex> lock(m_chat_list_mutex);
     auto it = m_chat_map.find(chatId);
@@ -491,6 +552,7 @@ std::string AppState::GetChatTitle(const std::string& chatId) {
     }
     return chatId.substr(0, 12);
 }
+
 void AppState::DeleteChatItem(const std::string& chatId) {
     {
         std::lock_guard<std::mutex> lock(m_chat_list_mutex);
@@ -508,6 +570,8 @@ void AppState::DeleteChatItem(const std::string& chatId) {
     }
     emit EventDispatcher::instance()->chatListUpdated();
 }
+
+
 void AppState::SwapChatId(const std::string& oldId, const std::string& newId) {
     {
         std::lock_guard<std::mutex> lock(m_chat_list_mutex);
@@ -558,13 +622,14 @@ void AppState::SwapChatId(const std::string& oldId, const std::string& newId) {
     emit EventDispatcher::instance()->chatIdSwapped(oldId, newId);
     emit EventDispatcher::instance()->chatListUpdated();
 }
+
+
 void AppState::UpdateChatStatus(const std::string& chatId, Status status, const std::string& error_txt) {
     {
         std::lock_guard<std::mutex> lock(m_status_mutex);
         m_chat_status_map[chatId].status = status;
         m_chat_status_map[chatId].error_txt = error_txt;
     }
-    // Emit signal AFTER releasing lock
     emit EventDispatcher::instance()->chatListUpdated();
     emit EventDispatcher::instance()->chatMessageUpdated(chatId);
 }
@@ -580,6 +645,7 @@ bool AppState::GetChatStatus(const std::string& chatId, Status& outStatus, std::
     }
     return false;
 }
+
 void AppState::Add_Window(
     std::unique_ptr<WindowState> ws,
     const std::string& chatId)
@@ -587,10 +653,13 @@ void AppState::Add_Window(
     std::lock_guard<std::mutex> lock(m_windows_mutex);
     Opened_Window[chatId] = std::move(ws);
 }
+
+
 void AppState::Remove_Window(const std::string& ChatId) {
     std::lock_guard<std::mutex> lock(m_windows_mutex);
     Opened_Window.erase(ChatId);
 }
+
 WindowState* AppState::Get_Window(
     const std::string& chatId) {
     std::lock_guard<std::mutex> lock(m_windows_mutex);
@@ -600,10 +669,12 @@ WindowState* AppState::Get_Window(
     }
     return nullptr;
 }
+
 void AppState::Model_Token_Info(const std::string& slug, const long long& max_tokens) {
     std::lock_guard<std::mutex> lock(m_models_mutex);
     Models_Token[slug] = max_tokens;
 }
+
 void AppState::UpdateChatTokens(const std::string& chatId, long long tokens) {
     {
         std::lock_guard<std::mutex> lock(m_chat_list_mutex);
@@ -611,6 +682,7 @@ void AppState::UpdateChatTokens(const std::string& chatId, long long tokens) {
     }
     emit EventDispatcher::instance()->chatListUpdated();
 }
+
 long long AppState::GetChatTokens(const std::string& chatId) {
     std::lock_guard<std::mutex> lock(m_chat_list_mutex);
     auto it = m_chat_map.find(chatId);
@@ -619,6 +691,7 @@ long long AppState::GetChatTokens(const std::string& chatId) {
     }
     return 0;
 }
+
 long long AppState::GetModelMaxTokens(const std::string& slug) {
     std::lock_guard<std::mutex> lock(m_models_mutex);
     auto it = Models_Token.find(slug);
@@ -627,6 +700,7 @@ long long AppState::GetModelMaxTokens(const std::string& slug) {
     }
     return 128000;
 }
+
 void AppState::Update_Mode(const std::string& chat_id, Modes mode) {
     std::lock_guard<std::mutex> lock(m_inputs_mutex);
     ChatInputs[chat_id].mode = mode;

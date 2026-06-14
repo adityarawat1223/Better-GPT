@@ -54,7 +54,6 @@ int App::Run()
     QApplication a(argc, argv);
     qRegisterMetaType<std::string>("std::string");
 
-    // Apply Premium Dark Mode Stylesheet (QSS)
     QString stylesheet = R"(
         /* Global Background & Typography */
         QMainWindow, QDialog, QWidget {
@@ -112,7 +111,6 @@ int App::Run()
             border: 1px solid #00c0a3;
         }
 
-        /* List Items */
         QListWidget {
             background-color: transparent;
             border: none;
@@ -135,7 +133,6 @@ int App::Run()
             color: #ffffff;
         }
 
-        /* Standard Buttons */
         QPushButton {
             background-color: #16181d;
             border: 1px solid #282c35;
@@ -152,7 +149,6 @@ int App::Run()
             background-color: #0f1013;
         }
 
-        /* Primary Accent Buttons (+ New Chat) */
         QPushButton#accentButton {
             background-color: #00c0a3;
             border: none;
@@ -168,7 +164,6 @@ int App::Run()
             background-color: #00a68d;
         }
 
-        /* Send Button */
         QPushButton#sendButton {
             background-color: #00c0a3;
             border: none;
@@ -186,7 +181,6 @@ int App::Run()
     )";
     a.setStyleSheet(stylesheet);
 
-    // Load Fonts
     QString appDir = QCoreApplication::applicationDirPath();
     QStringList fontPaths = {
         appDir + "/fonts/NotoSans-Regular.ttf",

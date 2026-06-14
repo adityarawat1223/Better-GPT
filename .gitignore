@@ -1,11 +1,10 @@
 # Visual Studio & Build
 .vs/
 .vscode/
-Debug/
-Release/
+# Debug/
+# Release/
 x64/
 x86/
-Build/
 out/
 bin/
 tools/

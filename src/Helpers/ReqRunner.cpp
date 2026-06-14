@@ -80,6 +80,9 @@ static std::string getExtensionFromMime(const std::string& mimeType) {
     
     return mimeType.substr(slash_pos + 1);
 };
+
+
+
 ReqRunner::ReqRunner() {}
 
 
@@ -306,7 +309,7 @@ bool ReqRunner::OnConsoleMessage(
     const CefString& source,
     int line)
 {
-    std::cout << message.ToString() << std::endl;
+    // std::cout << message.ToString() << std::endl;
     return false;
 }
 void ReqRunner::CreateBrowser() {
@@ -369,7 +372,7 @@ void ReqRunner::GetMe() {
 }
 
 void ReqRunner::PfpDownload(const std::string &url) {
-    std::cout << url << std::endl;
+    // std::cout << url << std::endl;
     FileScripts::NoCredFileDownload(url);
 }
 
@@ -390,17 +393,14 @@ void ReqRunner::MessageStreamSync(const std::string& body)
         const std::string chat_id =
             j["conversation_id"].get<std::string>();
 
-        // New chat detection: if no chat entry exists, this is a newly created chat
         bool is_new_chat = !AppState::HasChatEntry(chat_id);
         if (is_new_chat) {
             std::string temp_id = j.contains("temp_id") && j["temp_id"].is_string() ? j["temp_id"].get<std::string>() : "";
             if (!temp_id.empty() && temp_id != chat_id) {
-                // Swap the temp id with real id
                 AppState::SwapChatId(temp_id, chat_id);
                 std::cout << "[MessageStreamSync] Swapped temp chat " << temp_id << " to real chat " << chat_id << std::endl;
             }
             else {
-                // Initialize empty chat data so messages can be appended
                 std::vector<ChatMessage> empty;
                 AppState::AddChatsToMap(chat_id, empty);
                 AppState::AddChat(chat_id);
@@ -418,7 +418,6 @@ void ReqRunner::MessageStreamSync(const std::string& body)
             }
         }
 
-        // Store copies before releasing lock
         bool has_user_msg = j.contains("user_message") && j["user_message"].is_object();
         bool has_assistant_msg = j.contains("assistant_message") && j["assistant_message"].is_object();
 
@@ -438,9 +437,7 @@ void ReqRunner::MessageStreamSync(const std::string& body)
             assistant_thinking = aiObj.contains("thinking") && aiObj["thinking"].is_string() ? aiObj["thinking"].get<std::string>() : "";
         }
 
-        // -----------------------------
-        // User message - insert once so later sync frames do not drop attachments.
-        // -----------------------------
+
         if (has_user_msg && !user_msg_id.empty())
         {
             ChatMessage msg;
@@ -460,9 +457,7 @@ void ReqRunner::MessageStreamSync(const std::string& body)
             }
         }
 
-        // -----------------------------
-        // Assistant message - ignore brand-new id-only frames until something is visible
-        // -----------------------------
+      
         if (has_assistant_msg && !assistant_msg_id.empty())
         {
             bool has_visible_content = !assistant_content.empty() || !assistant_thinking.empty();
@@ -481,7 +476,6 @@ void ReqRunner::MessageStreamSync(const std::string& body)
             AppState::UpsertChatMessage(chat_id, std::move(msg));
         }
 
-        // When stream is completely finished, fetch the chat list to update the native titles
         if (j.contains("is_complete") && j["is_complete"].is_boolean()) {
             if (j["is_complete"].get<bool>()) {
                 ReqRunner::FetchChatList(0);

@@ -89,8 +89,10 @@ public:
     static void SetHasMoreChats(bool hasMore);
     static void AddChatsToMap(const std::string& ChatId, std::vector<ChatMessage>& Txtarry);
     static std::vector<ChatMessage> GetChatsFromMap(const std::string& ChatId);
-    static void AppendChatMessage(const std::string& ChatId, ChatMessage&& message);
-    static void UpdateChatMessageById(const std::string& ChatId, ChatMessage&& message);
+
+    // static void AppendChatMessage(const std::string& ChatId, ChatMessage&& message);
+    // static void UpdateChatMessageById(const std::string& ChatId, ChatMessage&& message);
+    
     static bool UpsertChatMessage(const std::string& ChatId, ChatMessage&& message);
     static bool InsertChatMessageIfMissing(const std::string& ChatId, ChatMessage&& message);
     static std::set<std::string> GetOpenChats();
