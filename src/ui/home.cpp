@@ -3,7 +3,7 @@
 #include "SearchWindow.h"
 #include "memdb/AppState.h"
 #include "Helpers/ReqRunner.h"
-
+#include <fstream>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QPushButton>
@@ -539,6 +539,8 @@ void MainChatWindow::onLogoutClicked()
 {
     auto btn = QMessageBox::question(this, "Logout", "Are you sure you want to log out?", QMessageBox::Yes | QMessageBox::No);
     if (btn == QMessageBox::Yes) {
+        std::filesystem::path sentinel = AppState::GetUserDir() / "logout_pending";
+        std::ofstream(sentinel).close();
         std::filesystem::remove_all(AppState::GetUserDir() / "cef_persistent_profile");
         QMessageBox::information(centralWidget(), "Logout", "Logged out successfully. Please restart application to log in again.");
     }

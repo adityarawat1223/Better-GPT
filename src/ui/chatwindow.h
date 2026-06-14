@@ -168,11 +168,13 @@ private:
     QTimer* m_updateTimer;
 
     QLabel* m_statusLabel;
+    QWidget* m_statusDot;
     QStackedWidget* m_stackedWidget;
     QWidget* m_loadingWidget;
     QLabel* m_loadingLabel;
     QWidget* m_errorWidget;
     QLabel* m_errorLabel;
+    QWidget* m_emptyChatWidget;
     QComboBox* m_modeDropdown;
     QComboBox* m_modelSelector;
     QWidget* m_attachmentsContainer;

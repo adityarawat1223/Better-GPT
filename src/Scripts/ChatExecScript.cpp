@@ -36,12 +36,12 @@ void ChatExecScript(const std::string &ChatId) {
             if (!response.ok) {
                 fetch('https://chatgpt.com/status-sync', {
                     method: 'POST',
-                    body: JSON.stringify({ chatId: ` + chatId + `, status: 5, error: 'HTTP ' + response.status })
+                    body: JSON.stringify({ chatId: chatId, status: 5, error: 'HTTP ' + response.status })
                 }).catch(e => {});
             } else {
                 fetch('https://chatgpt.com/status-sync', {
                     method: 'POST',
-                    body: JSON.stringify({ chatId: ` + chatId + `, status: 2 /* ResRecieved */ })
+                    body: JSON.stringify({ chatId: chatId, status: 2 /* ResRecieved */ })
                 }).catch(e => {});
             }
 
@@ -51,7 +51,7 @@ void ChatExecScript(const std::string &ChatId) {
         } catch (err) {
             fetch('https://chatgpt.com/status-sync', {
                 method: 'POST',
-                body: JSON.stringify({ chatId: ` + chatId + `, status: 5, error: err.toString() })
+                body: JSON.stringify({ chatId: chatId, status: 5, error: err.toString() })
             }).catch(e => {});
         }
     })();)";

@@ -457,12 +457,16 @@ void AppState::Add_Input(const std::string& input, const std::string& ChatId) {
 }
 
 void AppState::Update_User_Info(std::string& profurl, std::string& name, std::int64_t& created_at, std::string& email, std::string& user_id) {
+    {
     std::lock_guard<std::mutex> lock(m_user_mutex);
     user.pfp_url = std::move(profurl);
     user.user_name = std::move(name);
     user.email = std::move(email);
     user.created_at = std::move(created_at);
     user.user_id = std::move(user_id);
+    }
+    emit EventDispatcher::instance()->chatListUpdated();
+
 }
 
 std::string AppState::Get_User_ID() {

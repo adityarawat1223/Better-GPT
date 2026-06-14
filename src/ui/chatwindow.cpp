@@ -903,11 +903,24 @@ void ChatWindow::setupUi()
     headerLayout->addWidget(titleLabel);
     headerLayout->addStretch();
 
-    m_statusLabel = new QLabel("", header);
+    QWidget* statusContainer = new QWidget(header);
+    QHBoxLayout* statusLayout = new QHBoxLayout(statusContainer);
+    statusLayout->setContentsMargins(0, 0, 0, 0);
+    statusLayout->setSpacing(8);
+
+    m_statusDot = new QWidget(statusContainer);
+    m_statusDot->setFixedSize(8, 8);
+    m_statusDot->setAttribute(Qt::WA_StyledBackground, true);
+    m_statusDot->setStyleSheet("background-color: #6b7280; border-radius: 4px;");
+    statusLayout->addWidget(m_statusDot, 0, Qt::AlignVCenter);
+
+    m_statusLabel = new QLabel("", statusContainer);
     m_statusLabel->setStyleSheet("color: #00c0a3; font-size: 12px; background: transparent;");
     m_statusLabel->setCursor(Qt::PointingHandCursor);
     m_statusLabel->installEventFilter(this);
-    headerLayout->addWidget(m_statusLabel);
+    statusLayout->addWidget(m_statusLabel, 0, Qt::AlignVCenter);
+
+    headerLayout->addWidget(statusContainer);
 
     mainLayout->addWidget(header);
 
@@ -972,6 +985,79 @@ void ChatWindow::setupUi()
     errorLayout->addWidget(m_errorLabel, 0, Qt::AlignCenter);
     errorLayout->addWidget(retryBtn, 0, Qt::AlignCenter);
     m_stackedWidget->addWidget(m_errorWidget);
+
+    // Empty Chat View (Page 3)
+    m_emptyChatWidget = new QWidget(m_stackedWidget);
+    QVBoxLayout* emptyLayout = new QVBoxLayout(m_emptyChatWidget);
+    emptyLayout->setAlignment(Qt::AlignCenter);
+    emptyLayout->setSpacing(24);
+    emptyLayout->setContentsMargins(40, 40, 40, 40);
+
+    QLabel* emptyTitle = new QLabel("Send your first message", m_emptyChatWidget);
+    emptyTitle->setStyleSheet("color: #ececed; font-size: 20px; font-weight: bold; font-family: 'Segoe UI';");
+    emptyLayout->addWidget(emptyTitle, 0, Qt::AlignCenter);
+
+    QLabel* emptySubtitle = new QLabel("Start a conversation with Desktop-GPT by typing in the input box below.", m_emptyChatWidget);
+    emptySubtitle->setStyleSheet("color: #7d8087; font-size: 13px; font-family: 'Segoe UI'; line-height: 20px;");
+    emptySubtitle->setWordWrap(true);
+    emptySubtitle->setAlignment(Qt::AlignCenter);
+    emptySubtitle->setMaximumWidth(450);
+    emptyLayout->addWidget(emptySubtitle, 0, Qt::AlignCenter);
+
+    // Suggestions Grid Container
+    QWidget* suggestionsContainer = new QWidget(m_emptyChatWidget);
+    QHBoxLayout* suggestionsLayout = new QHBoxLayout(suggestionsContainer);
+    suggestionsLayout->setSpacing(16);
+    suggestionsLayout->setContentsMargins(0, 16, 0, 0);
+
+    auto createSuggestionCard = [this](const QString& title, const QString& prompt) {
+        QPushButton* card = new QPushButton(m_emptyChatWidget);
+        card->setCursor(Qt::PointingHandCursor);
+        card->setFixedWidth(240);
+        card->setFixedHeight(90);
+        card->setStyleSheet(R"(
+            QPushButton {
+                background-color: #121316;
+                color: #ececed;
+                border: 1px solid #232429;
+                border-radius: 10px;
+                text-align: left;
+            }
+            QPushButton:hover {
+                background-color: #18191d;
+                border-color: #00c0a3;
+            }
+        )");
+
+        QVBoxLayout* cardLayout = new QVBoxLayout(card);
+        cardLayout->setContentsMargins(16, 12, 16, 12);
+        cardLayout->setSpacing(4);
+
+        QLabel* cardTitle = new QLabel(title, card);
+        cardTitle->setStyleSheet("color: #00c0a3; font-weight: bold; font-size: 12px; font-family: 'Segoe UI'; background: transparent;");
+        
+        QLabel* cardText = new QLabel(prompt, card);
+        cardText->setStyleSheet("color: #8c909a; font-size: 11px; font-family: 'Segoe UI'; background: transparent;");
+        cardText->setWordWrap(true);
+        cardText->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+
+        cardLayout->addWidget(cardTitle);
+        cardLayout->addWidget(cardText);
+
+        connect(card, &QPushButton::clicked, this, [this, prompt]() {
+            inputEdit->setPlainText(prompt);
+            inputEdit->setFocus();
+        });
+
+        return card;
+    };
+
+    suggestionsLayout->addWidget(createSuggestionCard("Explain Code", "Explain how recursion works in C++ with a simple example."));
+    suggestionsLayout->addWidget(createSuggestionCard("Draft Email", "Draft a professional email asking for a project status update."));
+    suggestionsLayout->addWidget(createSuggestionCard("Brainstorm Ideas", "Brainstorm 5 unique startup ideas involving AI and productivity."));
+
+    emptyLayout->addWidget(suggestionsContainer, 0, Qt::AlignCenter);
+    m_stackedWidget->addWidget(m_emptyChatWidget);
 
     mainLayout->addWidget(m_stackedWidget, 1);
 
@@ -1335,52 +1421,56 @@ void ChatWindow::updateStatus()
     std::string titleStr = AppState::GetChatTitle(m_chatId);
     setWindowTitle(QString("Chat - %1").arg(QString::fromStdString(titleStr)));
 
-    // --- Always update the header status label ---
+    // --- Always update the header status label and status dot ---
     if (!tracked) {
-        m_statusLabel->setText(tokenText);
+        m_statusLabel->setText("Idle | " + tokenText);
+        m_statusDot->setStyleSheet("background-color: #6b7280; border-radius: 4px;"); // Grey (untracked)
     }
     else {
-        if (status == Status::ReqSent) m_statusLabel->setText("Request Sent | " + tokenText);
-        else if (status == Status::ResRecieved) m_statusLabel->setText("Response Received | " + tokenText);
-        else if (status == Status::Parsing) m_statusLabel->setText("Parsing | " + tokenText);
-        else if (status == Status::Error) m_statusLabel->setText("Error | " + tokenText);
-        else m_statusLabel->setText("Ready | " + tokenText);
+        if (status == Status::ReqSent) {
+            m_statusLabel->setText("Requesting | " + tokenText);
+            m_statusDot->setStyleSheet("background-color: #e5a93b; border-radius: 4px;"); // Amber
+        }
+        else if (status == Status::ResRecieved) {
+            m_statusLabel->setText("Receiving | " + tokenText);
+            m_statusDot->setStyleSheet("background-color: #e5a93b; border-radius: 4px;"); // Amber
+        }
+        else if (status == Status::Parsing) {
+            m_statusLabel->setText("Parsing | " + tokenText);
+            m_statusDot->setStyleSheet("background-color: #e5a93b; border-radius: 4px;"); // Amber
+        }
+        else if (status == Status::Cached) {
+            m_statusLabel->setText("Cached | " + tokenText);
+            m_statusDot->setStyleSheet("background-color: #00c0a3; border-radius: 4px;"); // Green
+        }
+        else if (status == Status::Error) {
+            m_statusLabel->setText("Error | " + tokenText);
+            m_statusDot->setStyleSheet("background-color: #ef4444; border-radius: 4px;"); // Red
+        }
+        else {
+            m_statusLabel->setText("Idle | " + tokenText);
+            m_statusDot->setStyleSheet("background-color: #6b7280; border-radius: 4px;"); // Grey
+        }
     }
 
     // --- Determine which view to show ---
-
-    // If we already have messages loaded, always show the chat view
-    if (chatModel->rowCount() > 0) {
-        m_stackedWidget->setCurrentIndex(0); // Chat View
-    }
-    // If cached (loaded from disk), show chat view even if empty
-    else if (tracked && status == Status::Cached) {
-        m_stackedWidget->setCurrentIndex(0);
-    }
-    // Error state
-    else if (tracked && status == Status::Error) {
+    if (tracked && status == Status::Error) {
         m_errorLabel->setText(QString::fromStdString(errorText));
         m_stackedWidget->setCurrentIndex(2); // Error View
     }
-    else if (status == Status::ReqSent) {
-        m_loadingLabel->setText("Fetching conversation...");
-        m_stackedWidget->setCurrentIndex(1);
-    }
-    else if (status == Status::ResRecieved) {
-        m_loadingLabel->setText("Receiving response...");
-        m_stackedWidget->setCurrentIndex(1);
-    }
-    else if (status == Status::Parsing) {
-        m_loadingLabel->setText("Parsing data...");
-        m_stackedWidget->setCurrentIndex(1);
+    else if (tracked && (status == Status::ReqSent || status == Status::ResRecieved || status == Status::Parsing) && chatModel->rowCount() == 0) {
+        if (status == Status::ReqSent) m_loadingLabel->setText("Requesting...");
+        else if (status == Status::ResRecieved) m_loadingLabel->setText("Receiving...");
+        else if (status == Status::Parsing) m_loadingLabel->setText("Parsing...");
+        m_stackedWidget->setCurrentIndex(1); // Loading View
     }
     else {
-        if (tracked) {
-            m_loadingLabel->setText("Loading...");
-            m_stackedWidget->setCurrentIndex(1);
+        // We are either done loading (Cached) or we already have messages loaded in-memory
+        if (chatModel->rowCount() > 0) {
+            m_stackedWidget->setCurrentIndex(0); // Normal Chat View
         }
         else {
-            m_stackedWidget->setCurrentIndex(0); // Untracked/New empty chat
+            m_stackedWidget->setCurrentIndex(3); // Empty Chat View
         }
     }
 

@@ -169,7 +169,7 @@ void MessageScript(const std::string& out, const std::string& temp_chat_id) {
                 await finalizeSync();
                 fetch('https://chatgpt.com/status-sync', {
                     method: 'POST',
-                    body: JSON.stringify({ chatId: conversationId, status: 2 /* ResRecieved */ })
+                    body: JSON.stringify({ chatId: conversationId, status: 4 /* Cached */ })
                 }).catch(e => {});
                 break;
             }

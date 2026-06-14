@@ -197,6 +197,26 @@ cef_return_value_t ReqRunner::OnBeforeResourceLoad(
         }
         return RV_CANCEL;
     }
+
+    if (url.find("/status-sync") != std::string::npos)
+    {
+        std::string body = std::move(GetBody(request));
+        if (!body.empty()) {
+            try {
+                json j = json::parse(body);
+                if (j.contains("chatId") && j["chatId"].is_string() && j.contains("status") && j["status"].is_number()) {
+                    std::string chatId = j["chatId"].get<std::string>();
+                    Status status = static_cast<Status>(j["status"].get<int>());
+                    std::string error = j.contains("error") && j["error"].is_string() ? j["error"].get<std::string>() : "";
+                    StatusSyncIPC(chatId, status, error);
+                }
+            }
+            catch (const std::exception& e) {
+                std::cerr << "[StatusSyncIPC Parsing Error] " << e.what() << std::endl;
+            }
+        }
+        return RV_CANCEL;
+    }
    
     if (url.find("file-processed") != std::string::npos)
     {
@@ -278,6 +298,8 @@ void ReqRunner::OnLoadEnd(
 }
 void ReqRunner::ChatTextExecution(const std::string& ChatId) {
     if (AppState::HasChatData(ChatId)) return;
+
+    AppState::UpdateChatStatus(ChatId, Status::ReqSent);
 
     auto browser = AppState::GetHiddenBrowser();
     if (!browser) {
@@ -528,4 +550,8 @@ void ReqRunner::RenameChat(const std::string& chatId, const std::string& newName
 
 void ReqRunner::DeleteChat(const std::string& chatId) {
     ChatDeleteScript(chatId);
+}
+
+void ReqRunner::StatusSyncIPC(const std::string& chatId, Status status, const std::string& error) {
+    AppState::UpdateChatStatus(chatId, status, error);
 }
