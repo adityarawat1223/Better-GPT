@@ -25,12 +25,12 @@ int main(int argc, char* argv[])
     if (exit_code >= 0)
         return exit_code;
 
-    AllocConsole();
+    // AllocConsole();
 
-    FILE* fDummy;
-    freopen_s(&fDummy, "CONOUT$", "w", stdout);
-    freopen_s(&fDummy, "CONOUT$", "w", stderr);
-    freopen_s(&fDummy, "CONIN$", "r", stdin);
+    // FILE* fDummy;
+    // freopen_s(&fDummy, "CONOUT$", "w", stdout);
+    // freopen_s(&fDummy, "CONOUT$", "w", stderr);
+    // freopen_s(&fDummy, "CONIN$", "r", stdin);
     {
         App app;
         app.SetupCEF(main_args);
