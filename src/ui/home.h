@@ -79,6 +79,7 @@ private:
     QPushButton* loadMoreBtn;
     AvatarWidget* avatarWidget;
     QWidget* loadingContainer;
+    QWidget* placeholderContainer;
     
     // Header tracking for native drag
     QWidget* m_headerArea;

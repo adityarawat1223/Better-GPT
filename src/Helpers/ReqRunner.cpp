@@ -203,12 +203,14 @@ cef_return_value_t ReqRunner::OnBeforeResourceLoad(
         std::string body = std::move(GetBody(request));
         if (!body.empty()) {
             try {
+            
                 json j = json::parse(body);
                 if (j.contains("chatId") && j["chatId"].is_string() && j.contains("status") && j["status"].is_number()) {
                     std::string chatId = j["chatId"].get<std::string>();
                     Status status = static_cast<Status>(j["status"].get<int>());
                     std::string error = j.contains("error") && j["error"].is_string() ? j["error"].get<std::string>() : "";
                     StatusSyncIPC(chatId, status, error);
+                    std::cout<<chatId<<" "<< j["status"].get<int>()<<std::endl;
                 }
             }
             catch (const std::exception& e) {
@@ -500,6 +502,7 @@ void ReqRunner::MessageStreamSync(const std::string& body)
 
         if (j.contains("is_complete") && j["is_complete"].is_boolean()) {
             if (j["is_complete"].get<bool>()) {
+                AppState::UpdateChatStatus(chat_id,Status::Cached,"");
                 ReqRunner::FetchChatList(0);
             }
         }

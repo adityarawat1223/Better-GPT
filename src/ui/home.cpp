@@ -373,6 +373,25 @@ void MainChatWindow::setupUi()
 
     containerLayout->addWidget(loadingContainer);
 
+    // Placeholder Container (for empty chat list)
+    placeholderContainer = new QWidget(centerContainer);
+    QVBoxLayout* placeholderLayout = new QVBoxLayout(placeholderContainer);
+    placeholderLayout->setAlignment(Qt::AlignCenter);
+    placeholderLayout->setContentsMargins(0, 40, 0, 40);
+    placeholderLayout->setSpacing(12);
+
+    QLabel* placeholderIcon = new QLabel("💬", placeholderContainer);
+    placeholderIcon->setStyleSheet("font-size: 32px; background: transparent;");
+    QLabel* placeholderLabel = new QLabel("No conversations found.\nCreate a new chat to begin!", placeholderContainer);
+    placeholderLabel->setAlignment(Qt::AlignCenter);
+    placeholderLabel->setStyleSheet("color: #7d8087; font-size: 13px; font-weight: 500; background: transparent;");
+
+    placeholderLayout->addWidget(placeholderIcon, 0, Qt::AlignCenter);
+    placeholderLayout->addWidget(placeholderLabel, 0, Qt::AlignCenter);
+    placeholderContainer->hide();
+
+    containerLayout->addWidget(placeholderContainer);
+
     centerLayout->addWidget(centerContainer);
     centerLayout->addStretch(1);
 
@@ -387,13 +406,20 @@ void MainChatWindow::refreshChatList()
 
     if (m_chats.empty())
     {
-        loadingContainer->show();
+        if (AppState::IsChatListLoaded()) {
+            loadingContainer->hide();
+            placeholderContainer->show();
+        } else {
+            loadingContainer->show();
+            placeholderContainer->hide();
+        }
         chatListWidget->hide();
         loadMoreBtn->hide();
     }
     else
     {
         loadingContainer->hide();
+        placeholderContainer->hide();
         chatListWidget->show();
         
         if (AppState::HasMoreChats()) {

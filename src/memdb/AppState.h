@@ -58,6 +58,7 @@ private:
     static inline std::condition_variable UploadCV;
     static inline std::vector<FileRef> library;
     static inline std::unordered_map<std::string, std::unique_ptr<WindowState>> Opened_Window;
+    static inline bool m_chat_list_loaded = false;
     
     struct ChatStatus {
         Status status;
@@ -117,6 +118,7 @@ public:
     static bool Update_Asset_Status(UploadStatus uploadstatus, const std::string& ChatId, const std::string& local_id);
     static void Set_Parent(const std::string& ChatId, const std::string& Pid);
     static std::string Get_Parent(const std::string& ChatId);
+    static bool IsChatListLoaded();
     static void Update_Model(const std::string& model, const std::string& chat_id);
     static UploadStatus Get_Asset_Status(const std::string& ChatId, const std::string& Local_id);
     static bool Update_Upload_Url(const std::string& ChatId, const std::string& local_id, const std::string& url, const std::string& file_id);
@@ -147,4 +149,5 @@ public:
     static long long GetChatTokens(const std::string& chatId);
     static long long GetModelMaxTokens(const std::string& slug);
     static void Update_Mode(const std::string& chat_id, Modes mode);
+    // static void Token_Update(const std::string& chatId);
 };

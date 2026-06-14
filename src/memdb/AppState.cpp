@@ -34,6 +34,7 @@ void AppState::UpdateHiddenBrowser(CefRefPtr<CefBrowser> browser) {
 
 
 void AppState::SetChatList(std::vector<ChatItem> fresh_list) {
+    m_chat_list_loaded = true;
     {
         std::lock_guard<std::mutex> lock(m_chat_list_mutex);
         std::unordered_set<std::string> incoming_ids;
@@ -137,6 +138,7 @@ void AppState::SetHasMoreChats(bool hasMore) {
 }
 
 void AppState::AddChatsToMap(const std::string& ChatId, std::vector<ChatMessage>& Txtarry) {
+  
     {
         std::lock_guard<std::mutex> lock(m_messages_mutex);
         ChatIdToText[ChatId] = std::move(Txtarry);
@@ -168,8 +170,8 @@ bool AppState::UpsertChatMessage(const std::string& ChatId, ChatMessage&& messag
         auto& messages = ChatIdToText[ChatId];
         size_t sz = messages.size();
 
-        for(size_t i = sz - 1 ; i >= 0 ; i--){
-            auto &existing = messages[i];
+       for (size_t i = sz; i > 0; --i) {
+            auto &existing = messages[i - 1];
             if (existing.message_id == message.message_id) {
                 existing = std::move(message);
                 updated = true;
@@ -193,8 +195,8 @@ bool AppState::InsertChatMessageIfMissing(const std::string& ChatId, ChatMessage
         size_t sz = messages.size();
 
         
-        for(size_t i = sz - 1 ; i >= 0 ; i--){
-            auto &existing = messages[i];
+       for (size_t i = sz; i > 0; --i) {
+            auto &existing = messages[i - 1];
             if (existing.message_id == message.message_id) {
                 return false;
             }
@@ -383,6 +385,10 @@ std::string AppState::Get_Parent(const std::string& ChatId) {
     std::lock_guard<std::mutex> lock(m_inputs_mutex);
     auto it = Chat_Parent_Id.find(ChatId);
     return it != Chat_Parent_Id.end() ? it->second : "";
+}
+
+bool AppState::IsChatListLoaded() {
+    return m_chat_list_loaded;
 }
 
 
@@ -629,10 +635,22 @@ void AppState::SwapChatId(const std::string& oldId, const std::string& newId) {
 
 
 void AppState::UpdateChatStatus(const std::string& chatId, Status status, const std::string& error_txt) {
+    
     {
         std::lock_guard<std::mutex> lock(m_status_mutex);
-        m_chat_status_map[chatId].status = status;
-        m_chat_status_map[chatId].error_txt = error_txt;
+                Status currentStatus = Status::NotOpened;
+        auto it = m_chat_status_map.find(chatId);
+        if (it != m_chat_status_map.end()) {
+            currentStatus = it->second.status;
+        }
+        if (status == Status::NotOpened || 
+            status == Status::Error || 
+            status == Status::ReqSent || 
+            status > currentStatus) 
+        {
+            m_chat_status_map[chatId].status = status;
+            m_chat_status_map[chatId].error_txt = error_txt;
+        }
     }
     emit EventDispatcher::instance()->chatListUpdated();
     emit EventDispatcher::instance()->chatMessageUpdated(chatId);
@@ -709,3 +727,5 @@ void AppState::Update_Mode(const std::string& chat_id, Modes mode) {
     std::lock_guard<std::mutex> lock(m_inputs_mutex);
     ChatInputs[chat_id].mode = mode;
 }
+
+
