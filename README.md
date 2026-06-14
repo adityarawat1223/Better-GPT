@@ -16,6 +16,8 @@ Its More Optimized compared To native Electron Apps , Most of The Memory OverHea
 
 - **Selecting Model**: Currently Free Tier User can only Auto Select as Models in browser Side but our App Allowes them to choose Legacy or Gpt 5 as backend allows User to select between this But its Blocked By Browser UI
 
+- **No Api**: Directly Login Your Account Plug and Play
+  
 Upcoming Features :-
 -  **Chat Download**: Downloading Chats easily .
 -  **Search & History**: (Present currently in App just Jumping to chat is not ready Yet)
