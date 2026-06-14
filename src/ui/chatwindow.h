@@ -156,6 +156,7 @@ private slots:
     void onScrollValueChanged(int value);
     void updateStatus();
     void onRetryClicked();
+    void onRefreshClicked();
 
 private:
     void setupUi();
@@ -180,6 +181,7 @@ private:
     QWidget* m_attachmentsContainer;
     QHBoxLayout* m_attachmentsLayout;
     QPushButton* m_sendBtn;
+    QPushButton* m_refreshBtn;
 
     size_t m_visibleLimit = 50;
 };

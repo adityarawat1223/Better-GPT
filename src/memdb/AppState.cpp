@@ -167,20 +167,51 @@ bool AppState::UpsertChatMessage(const std::string& ChatId, ChatMessage&& messag
     bool updated = false;
     {
         std::lock_guard<std::mutex> lock(m_messages_mutex);
+        std::lock_guard<std::mutex> lock2(m_chat_list_mutex);
         auto& messages = ChatIdToText[ChatId];
         size_t sz = messages.size();
+        long long total_change = 0;
 
        for (size_t i = sz; i > 0; --i) {
             auto &existing = messages[i - 1];
             if (existing.message_id == message.message_id) {
+
+                for(auto &ele : existing.blocks){
+                    if(ele.type == BlockType::Text){
+                        
+                        size_t token_count = (ele.content.size()/4);
+                        total_change -= token_count;
+                    }
+                }
                 existing = std::move(message);
+
+                for(auto &ele : existing.blocks){
+                    if(ele.type == BlockType::Text){
+                        
+                        size_t token_count = (ele.content.size()/4);
+                        total_change += token_count;
+                    }
+                }
                 updated = true;
                 break;
             }
         }
         if (!updated) {
             messages.push_back(std::move(message));
+            auto &msg = messages[messages.size() - 1];
+              for(auto &ele : msg.blocks){
+                    if(ele.type == BlockType::Text){
+                        
+                        size_t token_count = (ele.content.size()/4);
+                        total_change += token_count;
+                    }
+            }
         }
+
+        m_chat_map[ChatId].current_tokens+= total_change;
+
+
+        
     }
 
     emit EventDispatcher::instance()->chatMessageUpdated(ChatId);
@@ -188,14 +219,14 @@ bool AppState::UpsertChatMessage(const std::string& ChatId, ChatMessage&& messag
 }
 
 bool AppState::InsertChatMessageIfMissing(const std::string& ChatId, ChatMessage&& message) {
-    
+    bool inserted = false;
     {
         std::lock_guard<std::mutex> lock(m_messages_mutex);
+        std::lock_guard<std::mutex> lock2(m_chat_list_mutex);
         auto& messages = ChatIdToText[ChatId];
         size_t sz = messages.size();
 
-        
-       for (size_t i = sz; i > 0; --i) {
+        for (size_t i = sz; i > 0; --i) {
             auto &existing = messages[i - 1];
             if (existing.message_id == message.message_id) {
                 return false;
@@ -203,11 +234,22 @@ bool AppState::InsertChatMessageIfMissing(const std::string& ChatId, ChatMessage
         }
 
         messages.push_back(std::move(message));
+        auto &msg = messages[messages.size() - 1];
+        long long total_change = 0;
+        for (auto &ele : msg.blocks) {
+            if (ele.type == BlockType::Text) {
+                size_t token_count = (ele.content.size()/4);
+                total_change += token_count;
+            }
+        }
+        m_chat_map[ChatId].current_tokens += total_change;
+        inserted = true;
     }
 
     emit EventDispatcher::instance()->chatMessageUpdated(ChatId);
-    return true;
+    return inserted;
 }
+
 
 std::set<std::string> AppState::GetOpenChats() {
     std::lock_guard<std::mutex> lock(m_chat_list_mutex);

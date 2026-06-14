@@ -5,17 +5,32 @@
 #include <QScrollBar>
 #include "memdb/AppState.h"
 #include <QStringList>
+#include "EventDispatcher.h"
 
 TokenDetailsWindow::TokenDetailsWindow(const std::string& chatId, QWidget* parent)
     : QDialog(parent), m_chatId(chatId)
 {
     setupUi();
     loadAndCalculateContext();
+
+    connect(EventDispatcher::instance(), &EventDispatcher::chatMessageUpdated, this, [this](const std::string& chatId) {
+        if (chatId == m_chatId) {
+            loadAndCalculateContext();
+        }
+    });
+
+    connect(EventDispatcher::instance(), &EventDispatcher::chatIdSwapped, this, [this](const std::string& oldId, const std::string& newId) {
+        if (oldId == m_chatId) {
+            m_chatId = newId;
+            loadAndCalculateContext();
+        }
+    });
 }
 
 TokenDetailsWindow::~TokenDetailsWindow()
 {
 }
+
 
 void TokenDetailsWindow::setupUi()
 {
@@ -39,6 +54,7 @@ void TokenDetailsWindow::setupUi()
         "QScrollBar:vertical { background: transparent; width: 10px; }"
         "QScrollBar::handle:vertical { background: #3b3f4c; border-radius: 5px; }"
     );
+    loadAndCalculateContext();
     mainLayout->addWidget(m_textEdit);
 }
 
@@ -60,7 +76,6 @@ void TokenDetailsWindow::loadAndCalculateContext()
     QStringList lines;
     long long current_chars = 0;
 
-    // Traverse in reverse order to capture the "last X words" that the model remembers
     for (auto it = messages.rbegin(); it != messages.rend(); ++it) {
         const auto& msg = *it;
         if (msg.raw_content.empty()) continue;
@@ -68,8 +83,7 @@ void TokenDetailsWindow::loadAndCalculateContext()
         long long msg_len = msg.raw_content.length();
 
         if (current_chars + msg_len > max_chars) {
-            // Cut off remaining part. If it's the oldest message that fits partially, 
-            // the model only sees the end of it.
+         
             long long remaining = max_chars - current_chars;
             if (remaining > 0) {
                 std::string partial = msg.raw_content.substr(msg_len - remaining);
@@ -87,11 +101,9 @@ void TokenDetailsWindow::loadAndCalculateContext()
     if (lines.isEmpty()) {
         m_textEdit->setPlainText("No context available.");
     } else {
-        // Reverse the list since we appended in reverse order
         std::reverse(lines.begin(), lines.end());
         m_textEdit->setPlainText(lines.join(""));
         
-        // Scroll to the bottom so the user sees the most recent interaction
         QScrollBar* bar = m_textEdit->verticalScrollBar();
         bar->setValue(bar->maximum());
     }

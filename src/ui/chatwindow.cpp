@@ -903,6 +903,36 @@ void ChatWindow::setupUi()
     headerLayout->addWidget(titleLabel);
     headerLayout->addStretch();
 
+    m_refreshBtn = new QPushButton("Refresh", header);
+    m_refreshBtn->setFixedHeight(28);
+    m_refreshBtn->setCursor(Qt::PointingHandCursor);
+    m_refreshBtn->setStyleSheet(R"(
+        QPushButton {
+            background-color: #121316;
+            color: #ececed;
+            border: 1px solid #282c35;
+            border-radius: 4px;
+            padding: 0px 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        QPushButton:hover {
+            background-color: #1a1b20;
+            border-color: #00c0a3;
+        }
+        QPushButton:pressed {
+            background-color: #0c0d0f;
+        }
+        QPushButton:disabled {
+            background-color: #08090a;
+            color: #4e5157;
+            border-color: #1a1b1e;
+        }
+    )");
+    connect(m_refreshBtn, &QPushButton::clicked, this, &ChatWindow::onRefreshClicked);
+    headerLayout->addWidget(m_refreshBtn);
+    headerLayout->addSpacing(12);
+
     QWidget* statusContainer = new QWidget(header);
     QHBoxLayout* statusLayout = new QHBoxLayout(statusContainer);
     statusLayout->setContentsMargins(0, 0, 0, 0);
@@ -1408,6 +1438,16 @@ void ChatWindow::updateStatus()
 
     bool tracked = AppState::GetChatStatus(m_chatId, status, errorText);
 
+    if (m_refreshBtn) {
+        if (tracked && (status == Status::ReqSent || status == Status::ResRecieved || status == Status::Parsing)) {
+            m_refreshBtn->setEnabled(false);
+            m_refreshBtn->setText("Refreshing...");
+        } else {
+            m_refreshBtn->setEnabled(true);
+            m_refreshBtn->setText("Refresh");
+        }
+    }
+
     std::string slug = AppState::Get_Input_Box(m_chatId).model;
     if (slug.empty()) {
         slug = AppState::Get_Default_Model();
@@ -1485,4 +1525,10 @@ void ChatWindow::onRetryClicked()
 
     // Re-trigger the fetch
     ReqRunner::ChatTextExecution(m_chatId);
+}
+
+void ChatWindow::onRefreshClicked()
+{
+    ReqRunner::ChatTextExecution(m_chatId, true);
+    updateStatus();
 }

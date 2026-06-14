@@ -99,7 +99,7 @@ public:
         CefRefPtr<CefResponse> response,
         URLRequestStatus status,
         int64_t received_content_length) override;
-    static void ChatTextExecution(const std::string& chatid);
+    static void ChatTextExecution(const std::string& chatid, bool forceRefresh = false);
     static void FetchChatList(int offset);
     static void CreateBrowser();
     static void FileExecution(const std::string& FileId);

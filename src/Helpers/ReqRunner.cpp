@@ -298,8 +298,8 @@ void ReqRunner::OnLoadEnd(
         ChatTextExecution(id);
     }
 }
-void ReqRunner::ChatTextExecution(const std::string& ChatId) {
-    if (AppState::HasChatData(ChatId)) return;
+void ReqRunner::ChatTextExecution(const std::string& ChatId, bool forceRefresh) {
+    if (!forceRefresh && AppState::HasChatData(ChatId)) return;
 
     AppState::UpdateChatStatus(ChatId, Status::ReqSent);
 
@@ -468,6 +468,7 @@ void ReqRunner::MessageStreamSync(const std::string& body)
             msg.user = true;
             msg.message_id = user_msg_id;
             msg.timestamp = (uint64_t)time(nullptr);
+            msg.raw_content = user_content;
 
             InputBox inbox = AppState::Get_Input_Box(chat_id);
             for (const auto& pair : inbox.assets) {
@@ -494,6 +495,7 @@ void ReqRunner::MessageStreamSync(const std::string& body)
             msg.message_id = assistant_msg_id;
             msg.timestamp = (uint64_t)time(nullptr);
             msg.thinking = assistant_thinking;
+            msg.raw_content = assistant_content;
 
             Santizer(msg, assistant_content);
 
