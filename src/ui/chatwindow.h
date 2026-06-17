@@ -102,6 +102,8 @@ public:
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
     QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
 
+    const std::vector<ChatMessage>& getMessages() const { return m_messages; }
+
 private:
     std::vector<ChatMessage> m_messages;
     size_t m_visibleLimit = 50;
@@ -140,6 +142,9 @@ public:
     explicit ChatWindow(const std::string& chatId, QWidget* parent = nullptr);
     ~ChatWindow() override;
 
+    void scrollToMessage(const std::string& messageId);
+    static inline std::unordered_map<std::string, std::string> s_pendingScrolls;
+
 protected:
     void closeEvent(QCloseEvent* event) override;
     bool eventFilter(QObject* obj, QEvent* event) override;
@@ -157,11 +162,13 @@ private slots:
     void updateStatus();
     void onRetryClicked();
     void onRefreshClicked();
+    void onExportClicked();
 
 private:
     void setupUi();
 
     std::string m_chatId;
+    std::string m_pendingScrollMessageId;
     QListView* listView;
     ChatModel* chatModel;
     MessageDelegate* messageDelegate;
@@ -178,10 +185,12 @@ private:
     QWidget* m_emptyChatWidget;
     QComboBox* m_modeDropdown;
     QComboBox* m_modelSelector;
+    QPushButton* m_retryBtn;
+    QPushButton* m_refreshBtn;
+    QPushButton* m_exportBtn;
     QWidget* m_attachmentsContainer;
     QHBoxLayout* m_attachmentsLayout;
     QPushButton* m_sendBtn;
-    QPushButton* m_refreshBtn;
 
     size_t m_visibleLimit = 50;
 };

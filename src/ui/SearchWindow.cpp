@@ -46,7 +46,6 @@ void SearchWindow::setupUi()
 
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
 
-    // Search bar row
     QHBoxLayout* searchRow = new QHBoxLayout();
     m_searchEdit = new QLineEdit(this);
     m_searchEdit->setPlaceholderText("Enter search text...");
@@ -55,20 +54,19 @@ void SearchWindow::setupUi()
     searchRow->addWidget(m_searchBtn);
     mainLayout->addLayout(searchRow);
 
-    // Chats selection
     mainLayout->addWidget(new QLabel("Select open chats to search:", this));
     m_chatCheckList = new QListWidget(this);
     m_chatCheckList->setMaximumHeight(150);
     mainLayout->addWidget(m_chatCheckList);
 
-    // Results list
-    mainLayout->addWidget(new QLabel("Search Results:", this));
+    mainLayout->addWidget(new QLabel("Search Results: Double Click to Open", this));
     m_resultsList = new QListWidget(this);
     m_resultsList->setWordWrap(true);
     mainLayout->addWidget(m_resultsList);
 
     connect(m_searchBtn, &QPushButton::clicked, this, &SearchWindow::onSearchClicked);
     connect(m_searchEdit, &QLineEdit::returnPressed, this, &SearchWindow::onSearchClicked);
+    connect(m_resultsList, &QListWidget::itemDoubleClicked, this, &SearchWindow::onResultDoubleClicked);
 }
 
 void SearchWindow::populateChatList()
@@ -90,7 +88,7 @@ void SearchWindow::populateChatList()
         QListWidgetItem* item = new QListWidgetItem(title, m_chatCheckList);
         item->setData(Qt::UserRole, QString::fromStdString(chatId));
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-        item->setCheckState(Qt::Checked); // Checked by default
+        item->setCheckState(Qt::Checked);
     }
 }
 
@@ -115,7 +113,6 @@ void SearchWindow::onSearchClicked()
 
     m_resultsList->clear();
     
-    // Submit background job
     QByteArray utf8Query = query.toUtf8();
     std::string queryStr(utf8Query.constData(), utf8Query.length());
     AppState::Submit_Search_Job(queryStr, selectedChatIds);
@@ -124,11 +121,20 @@ void SearchWindow::onSearchClicked()
 
 void SearchWindow::onSearchResult(const QString& chatId, const QString& messageId, const QString& snippet, quint64 timestamp, int searchId)
 {
-    // Ignore results from previous searches
     if (searchId != m_currentSearchId) return;
 
     QListWidgetItem* item = new QListWidgetItem(m_resultsList);
     item->setText(snippet);
     item->setData(Qt::UserRole, chatId);
     item->setData(Qt::UserRole + 1, messageId);
+}
+
+void SearchWindow::onResultDoubleClicked(QListWidgetItem* item)
+{
+    if (!item) return;
+    std::string chatId = item->data(Qt::UserRole).toString().toUtf8().constData();
+    std::string messageId = item->data(Qt::UserRole + 1).toString().toUtf8().constData();
+
+    emit EventDispatcher::instance()->jumpToMessageRequested(chatId, messageId);
+    close();
 }

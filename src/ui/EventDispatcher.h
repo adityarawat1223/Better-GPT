@@ -18,6 +18,7 @@ signals:
     void chatIdSwapped(const std::string& oldId, const std::string& newId);
     void assetsUpdated(const std::string& chatId, const std::string& assetId);
     void searchResultFound(const QString& chatId, const QString& messageId, const QString& snippet, quint64 timestamp, int searchId);
+    void jumpToMessageRequested(const std::string& chatId, const std::string& messageId);
 private:
     EventDispatcher() = default;
     ~EventDispatcher() = default;

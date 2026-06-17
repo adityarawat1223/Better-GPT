@@ -146,6 +146,15 @@ MainChatWindow::MainChatWindow(QWidget* parent) : QMainWindow(parent)
         updateState();
     }, Qt::QueuedConnection);
 
+    connect(EventDispatcher::instance(), &EventDispatcher::jumpToMessageRequested, this, [this](const std::string& chatId, const std::string& messageId) {
+        if (m_activeChatWindows.find(chatId) == m_activeChatWindows.end()) {
+            ChatWindow::s_pendingScrolls[chatId] = messageId;
+            ReqRunner::ChatTextExecution(chatId);
+            AppState::AddChat(chatId);
+        }
+    }, Qt::QueuedConnection);
+
+
     // Initial state check
     updateState();
 }

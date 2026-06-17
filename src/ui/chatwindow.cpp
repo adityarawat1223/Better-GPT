@@ -18,7 +18,11 @@
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QMenu>
+#include <QFileDialog>
+#include <QTextStream>
+#include <QMessageBox>
 #include <QPainterPath>
+#include <QtConcurrent>
 #include <QApplication>
 #include <QClipboard>
 #include <QProcess>
@@ -524,7 +528,13 @@ void MessageDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
     QColor borderColor = msg.user ? QColor("#1a5649") : QColor("#26272b");
 
     painter->fillPath(path, bgColor);
-    painter->setPen(QPen(borderColor, 1));
+    
+    if (option.state & QStyle::State_Selected) {
+        painter->setPen(QPen(QColor("#00c0a3"), 2));
+    } else {
+        painter->setPen(QPen(borderColor, 1));
+    }
+    
     painter->drawPath(path);
 
     QPoint origin = bubbleRect.topLeft();
@@ -725,6 +735,21 @@ void MessageDelegate::handleAction(const QString& action) const
 ChatWindow::ChatWindow(const std::string& chatId, QWidget* parent)
     : QWidget(parent, Qt::Window), m_chatId(chatId)
 {
+    auto it = s_pendingScrolls.find(chatId);
+    if (it != s_pendingScrolls.end()) {
+        m_pendingScrollMessageId = it->second;
+        s_pendingScrolls.erase(it);
+    }
+
+    connect(EventDispatcher::instance(), &EventDispatcher::jumpToMessageRequested, this, [this](const std::string& chatId, const std::string& messageId) {
+        if (chatId == m_chatId) {
+            showNormal();
+            activateWindow();
+            raise();
+            scrollToMessage(messageId);
+        }
+    });
+
     m_updateTimer = new QTimer(this);
     m_updateTimer->setInterval(150); // Reduced from 33ms to 150ms — chat doesn't need 30 FPS
     m_updateTimer->setSingleShot(true);
@@ -791,6 +816,10 @@ ChatWindow::ChatWindow(const std::string& chatId, QWidget* parent)
                 QScrollBar* sb = listView->verticalScrollBar();
                 sb->setValue(sb->maximum());
                 }, Qt::QueuedConnection);
+        }
+
+        if (!m_pendingScrollMessageId.empty()) {
+            scrollToMessage(m_pendingScrollMessageId);
         }
         });
 
@@ -908,29 +937,58 @@ void ChatWindow::setupUi()
     m_refreshBtn->setCursor(Qt::PointingHandCursor);
     m_refreshBtn->setStyleSheet(R"(
         QPushButton {
-            background-color: #121316;
-            color: #ececed;
-            border: 1px solid #282c35;
-            border-radius: 4px;
-            padding: 0px 12px;
-            font-size: 12px;
+            background-color: #2b2d31;
+            color: #b0b3b8;
+            border: 1px solid #3f4147;
+            border-radius: 6px;
+            padding: 0 12px;
+            font-size: 13px;
             font-weight: 500;
         }
         QPushButton:hover {
-            background-color: #1a1b20;
-            border-color: #00c0a3;
+            background-color: #3f4147;
+            color: #ffffff;
+            border-color: #55575f;
         }
         QPushButton:pressed {
-            background-color: #0c0d0f;
+            background-color: #202225;
+            border-color: #2b2d31;
         }
         QPushButton:disabled {
-            background-color: #08090a;
-            color: #4e5157;
-            border-color: #1a1b1e;
+            background-color: #1e1f22;
+            color: #5c5f66;
+            border-color: #2b2d31;
         }
     )");
+
+    m_exportBtn = new QPushButton("Export", header);
+    m_exportBtn->setFixedHeight(28);
+    m_exportBtn->setCursor(Qt::PointingHandCursor);
+    m_exportBtn->setStyleSheet(R"(
+        QPushButton {
+            background-color: #2b2d31;
+            color: #b0b3b8;
+            border: 1px solid #3f4147;
+            border-radius: 6px;
+            padding: 0 12px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        QPushButton:hover {
+            background-color: #3f4147;
+            color: #ffffff;
+            border-color: #55575f;
+        }
+        QPushButton:pressed {
+            background-color: #202225;
+            border-color: #2b2d31;
+        }
+    )");
+
     connect(m_refreshBtn, &QPushButton::clicked, this, &ChatWindow::onRefreshClicked);
+    connect(m_exportBtn, &QPushButton::clicked, this, &ChatWindow::onExportClicked);
     headerLayout->addWidget(m_refreshBtn);
+    headerLayout->addWidget(m_exportBtn);
     headerLayout->addSpacing(12);
 
     QWidget* statusContainer = new QWidget(header);
@@ -1396,6 +1454,38 @@ void ChatWindow::updateMessages()
     }
 }
 
+void ChatWindow::scrollToMessage(const std::string& messageId)
+{
+    const std::vector<ChatMessage>& messages = chatModel->getMessages();
+    int targetIndex = -1;
+    for (int i = 0; i < (int)messages.size(); ++i) {
+        if (messages[i].message_id == messageId) {
+            targetIndex = i;
+            break;
+        }
+    }
+
+    if (targetIndex != -1) {
+        size_t requiredLimit = messages.size() - targetIndex;
+        if (requiredLimit > m_visibleLimit) {
+            m_visibleLimit = requiredLimit;
+            chatModel->setMessages(messages, m_visibleLimit);
+        }
+
+        size_t totalCount = messages.size();
+        size_t visibleCount = std::min(totalCount, m_visibleLimit);
+        size_t startIndex = totalCount - visibleCount;
+        int modelRow = targetIndex - startIndex;
+
+        if (modelRow >= 0 && modelRow < chatModel->rowCount()) {
+            QModelIndex idx = chatModel->index(modelRow);
+            listView->scrollTo(idx, QAbstractItemView::PositionAtCenter);
+            listView->setCurrentIndex(idx);
+            m_pendingScrollMessageId.clear();
+        }
+    }
+}
+
 void ChatWindow::onScrollValueChanged(int value)
 {
     if (value == listView->verticalScrollBar()->minimum())
@@ -1429,6 +1519,64 @@ void ChatWindow::onScrollValueChanged(int value)
                 }, Qt::QueuedConnection);
         }
     }
+}
+
+void ChatWindow::onExportClicked()
+{
+    QString fileName = QFileDialog::getSaveFileName(this, "Export Chat", "ChatExport.md", "Markdown Files (*.md);;All Files (*)");
+    if (fileName.isEmpty()) {
+        return;
+    }
+
+    std::vector<ChatMessage> messages = AppState::GetChatsFromMap(m_chatId);
+
+    QtConcurrent::run([fileName, messages]() {
+        QFile file(fileName);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QMetaObject::invokeMethod(qApp, [fileName]() {
+                QMessageBox::warning(nullptr, "Export Failed", "Could not open file for writing:\n" + fileName);
+            }, Qt::QueuedConnection);
+            return;
+        }
+
+        QTextStream out(&file);
+        out.setEncoding(QStringConverter::Utf8);
+
+        out << "# Chat Export\n\n";
+
+        for (const auto& msg : messages) {
+            if (msg.is_system_or_tool) continue;
+            
+            out << "**" << (msg.user ? "User" : "GPT") << ":**\n\n";
+            
+            if (!msg.thinking.empty()) {
+                out << "> **Thinking:**\n";
+                QString thinkingStr = QString::fromStdString(msg.thinking);
+                QStringList lines = thinkingStr.split('\n');
+                for (const QString& line : lines) {
+                    out << "> " << line << "\n";
+                }
+                out << "\n";
+            }
+            
+            for (const auto& block : msg.blocks) {
+                if (block.type == BlockType::Text || block.type == BlockType::Math) {
+                    out << QString::fromStdString(block.content) << "\n\n";
+                } else if (block.type == BlockType::Code) {
+                    out << "```" << QString::fromStdString(block.lang) << "\n" 
+                        << QString::fromStdString(block.content) << "\n```\n\n";
+                }
+            }
+            
+            out << "---\n\n";
+        }
+
+        file.close();
+
+        QMetaObject::invokeMethod(qApp, []() {
+            QMessageBox::information(nullptr, "Export Successful", "Chat exported successfully!");
+        }, Qt::QueuedConnection);
+    });
 }
 
 void ChatWindow::updateStatus()

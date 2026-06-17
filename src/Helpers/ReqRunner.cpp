@@ -560,3 +560,5 @@ void ReqRunner::DeleteChat(const std::string& chatId) {
 void ReqRunner::StatusSyncIPC(const std::string& chatId, Status status, const std::string& error) {
     AppState::UpdateChatStatus(chatId, status, error);
 }
+
+

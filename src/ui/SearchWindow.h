@@ -9,6 +9,7 @@
 
 class QLineEdit;
 class QListWidget;
+class QListWidgetItem;
 class QPushButton;
 
 class SearchWindow : public QDialog
@@ -21,6 +22,7 @@ public:
 private slots:
     void onSearchClicked();
     void onSearchResult(const QString& chatId, const QString& messageId, const QString& snippet, quint64 timestamp, int searchId);
+    void onResultDoubleClicked(QListWidgetItem* item);
 
 private:
     explicit SearchWindow(QWidget* parent = nullptr);
