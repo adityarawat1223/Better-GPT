@@ -82,3 +82,7 @@ Grateful for those
 ##  License
 
 This project is licensed under the [MIT License](LICENSE) - see the LICENSE file for details.
+
+## Download
+
+Latest Release :- https://github.com/adityarawat1223/Better-GPT/releases/tag/V1.0.1-Beta
