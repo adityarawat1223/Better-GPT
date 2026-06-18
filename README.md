@@ -25,9 +25,10 @@ Its More Optimized compared To native Electron Apps , Most of The Memory OverHea
 
 -  **Search & History**: Search and Jump to your Older Chats easily
 
+- **Library** : Download all your Files quickly directly to your PC in a single click
+  
 Upcoming Features :-
 -  **Better RT and Supporting all features**: Making Rich Text Format close to browser level and implementing all features like create image and deep research  .
-- **Library** - Will add soon
 
 ##  Technology Stack
 
