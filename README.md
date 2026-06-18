@@ -1,5 +1,8 @@
 # Better-GPT
 
+### Privacy
+Privacy First: Authentication is handled entirely by CEF directly with OpenAI's official endpoints. Your login credentials, Data and session cookies are never intercepted, stored, or transmitted to any third-party servers.
+
 ![Better-GPT Screenshot](assets/Home.jpg)
 ![Better-GPT Screenshot](assets/Perf%20Pic.jpg)
 ![Better-GPT Screenshot](assets/New%20Chat.jpg)
