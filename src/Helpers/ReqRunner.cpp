@@ -37,7 +37,7 @@ using json = nlohmann::json;
 #include "Serializer/MessageSerializer.h"
 #include "Scripts/ModelScript.h"
 #include <regex>
-
+#include "ui/EventDispatcher.h"
 
 static std::string GetBody(CefRefPtr<CefRequest> request) {
     std::string body;
@@ -291,6 +291,7 @@ void ReqRunner::OnLoadEnd(
       GetMe();
       InitScript();
       ModelScript();
+      FetchLibrary();
     std::lock_guard<std::mutex> lock(QueueMutex);
     while (!PendingChats.empty()) {
         std::string id = PendingChats.front();
@@ -313,11 +314,28 @@ void ReqRunner::ChatTextExecution(const std::string& ChatId, bool forceRefresh) 
 
     ChatExecScript(ChatId);
 }
-void ReqRunner::FileExecution(const std::string& FileId) {
 
+void ReqRunner::FileExecution(const std::string& FileId) {
+    try {
+        std::filesystem::path cacheDir = AppState::GetUserDir() / "cache";
+        
+        if (std::filesystem::exists(cacheDir)) {
+            for (const auto& entry : std::filesystem::directory_iterator(cacheDir)) {
+                if (entry.is_regular_file()) {
+                    std::string filename = entry.path().filename().string();
+                    if (filename.find(FileId) == 0) {
+                        emit EventDispatcher::instance()->fileDownloadComplete(filename);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Error checking cache: " << e.what() << std::endl;
+    }
 
     FileScripts::FileExec(FileId);
- 
 }
 
 void ReqRunner::FileDownloader(std::string url) {
@@ -333,7 +351,7 @@ bool ReqRunner::OnConsoleMessage(
     const CefString& source,
     int line)
 {
-    // std::cout << message.ToString() << std::endl;
+    std::cout << message.ToString() << std::endl;
     return false;
 }
 void ReqRunner::CreateBrowser() {

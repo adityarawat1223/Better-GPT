@@ -18,12 +18,10 @@ void SearchWorker()
             continue;
         }
 
-        // We use a regex for case-insensitive matching and to extract a snippet
         QRegularExpression regex(QRegularExpression::escape(query), QRegularExpression::CaseInsensitiveOption);
 
         for (const std::string& chatId : job.chatIds)
         {
-            // Abort if a new search was started
             if (AppState::GetActiveSearchId() != job.searchId) {
                 break;
             }
@@ -33,7 +31,6 @@ void SearchWorker()
             
             for (const ChatMessage& msg : messages)
             {
-                // Re-check abort
                 if (AppState::GetActiveSearchId() != job.searchId) {
                     break;
                 }
@@ -44,7 +41,6 @@ void SearchWorker()
                 QRegularExpressionMatch match = regex.match(content);
                 
                 if (match.hasMatch()) {
-                    // Extract snippet (e.g. 40 chars before and 80 after)
                     int matchStart = match.capturedStart();
                     int matchEnd = match.capturedEnd();
                     
@@ -53,14 +49,11 @@ void SearchWorker()
                     
                     QString snippet = content.mid(snippetStart, snippetLength);
                     
-                    // Add ellipsis if truncated
                     if (snippetStart > 0) snippet.prepend("...");
                     if (snippetStart + snippetLength < content.length()) snippet.append("...");
                     
-                    // Clean up newlines for display
                     snippet.replace('\n', ' ');
 
-                    // Emit via EventDispatcher
                     emit EventDispatcher::instance()->searchResultFound(
                         QString::fromStdString(chatId), 
                         QString::fromStdString(msg.message_id), 

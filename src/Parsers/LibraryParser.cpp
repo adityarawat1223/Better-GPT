@@ -1,4 +1,5 @@
 #include "LibraryParser.h"
+#include "ui/EventDispatcher.h"
 
 bool LibraryParser::InitFilter() {
     return true;
@@ -30,27 +31,24 @@ CefResponseFilter::FilterStatus  LibraryParser::Filter(
 
 
 void LibraryParser::Parse_Library() {
-
-
     try {
-
         json init = json::parse(raw_data);
 
-        if (init.is_array()) {
-            std::vector<FileRef>files;
-            for (auto &ele : init) {
-
+        if (init.is_object() && init.contains("items") && init["items"].is_array()) {
+            std::vector<FileRef> files;
+            for (auto &ele : init["items"]) {
                 FileRef fileref;
 
-                if (ele.contains("id") && ele["id"].is_string() && ele.contains("file_id") && ele["file_id"].is_string()
-                    && ele.contains("file_name") && ele["file_name"].is_string() && ele.contains("mime_type") &&
-                    ele["mime_type"].is_string() && ele.contains("file_size_bytes")
-                    )
+                if (ele.contains("id") && ele["id"].is_string() && 
+                    ele.contains("file_id") && ele["file_id"].is_string() && 
+                    ele.contains("file_name") && ele["file_name"].is_string() && 
+                    ele.contains("mime_type") && ele["mime_type"].is_string() && 
+                    ele.contains("file_size_bytes"))
                 {
                     std::string file_id = ele["file_id"].get<std::string>();
                     std::string mime_type = ele["mime_type"].get<std::string>();
                     std::string lib_file_id = ele["id"].get<std::string>();
-                    uint64_t size = ele["file_size_bytes"].get<uint64_t>();
+                    uint64_t size = ele["file_size_bytes"].is_number() ? ele["file_size_bytes"].get<uint64_t>() : 0;
                     std::string filename = ele["file_name"].get<std::string>();
 
                     fileref.lib_file_id = lib_file_id;
@@ -64,17 +62,15 @@ void LibraryParser::Parse_Library() {
             }
 
             if (!files.empty()) {
-
                 AppState::SetLibrary(files);
             }
         }
-
-
     }
     catch (const std::exception& e) {
-        std::cout << e.what() << std::endl;
+        std::cout << "LibraryParser Exception: " << e.what() << std::endl;
     }
-};
+    emit EventDispatcher::instance()->libraryUpdated();
+}
 
 LibraryParser::~LibraryParser() {
     Parse_Library();

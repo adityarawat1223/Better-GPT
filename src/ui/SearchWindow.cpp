@@ -124,6 +124,7 @@ void SearchWindow::onSearchResult(const QString& chatId, const QString& messageI
     if (searchId != m_currentSearchId) return;
 
     QListWidgetItem* item = new QListWidgetItem(m_resultsList);
+
     item->setText(snippet);
     item->setData(Qt::UserRole, chatId);
     item->setData(Qt::UserRole + 1, messageId);

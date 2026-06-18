@@ -5,6 +5,11 @@
 #include "Helpers/ReqRunner.h"
 #include <fstream>
 #include <QHBoxLayout>
+#include "DwnldScreen.h"
+#include <QDesktopServices>
+#include <QUrl>
+#include <QScreen>
+#include <QDir>
 #include <QVBoxLayout>
 #include <QPushButton>
 #include <QMenu>
@@ -583,7 +588,7 @@ void MainChatWindow::onLogoutClicked()
 
 void MainChatWindow::onLibraryClicked()
 {
-    QMessageBox::information(this, "Library", "Library module under construction.");
+    DwnldScreen::ShowWindow(this);
 }
 
 void MainChatWindow::onAvatarClicked()

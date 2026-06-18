@@ -19,6 +19,8 @@ signals:
     void assetsUpdated(const std::string& chatId, const std::string& assetId);
     void searchResultFound(const QString& chatId, const QString& messageId, const QString& snippet, quint64 timestamp, int searchId);
     void jumpToMessageRequested(const std::string& chatId, const std::string& messageId);
+    void fileDownloadComplete(const std::string& fileName);
+    void libraryUpdated();
 private:
     EventDispatcher() = default;
     ~EventDispatcher() = default;

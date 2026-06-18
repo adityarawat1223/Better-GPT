@@ -48,6 +48,8 @@ add_executable(DESKTOP_GPT WIN32
     src/ui/SearchWindow.cpp
     src/ui/EventDispatcher.h
     src/ui/EventDispatcher.cpp
+    src/ui/DwnldScreen.h
+    src/ui/DwnldScreen.cpp
     "src/Dto/Models.h"
     "src/Parsers/ModelsParser.h"
     "src/Parsers/ModelsParser.cpp"
@@ -90,7 +92,9 @@ add_executable(DESKTOP_GPT WIN32
     "src/Parsers/LibraryParser.h"
     "src/Parsers/LibraryParser.cpp"
     "src/Dto/Windows.h"
- "src/Parsers/InitParser.cpp" "src/Parsers/InitParser.h" "src/Scripts/InitScript.h" "src/Scripts/InitScript.cpp" "src/Scripts/ModelScript.h" "src/Scripts/ModelScript.cpp" "src/Scripts/TestScript.h" "src/Scripts/TestScript.cpp" "src/Scripts/RenameScript.h" "src/Scripts/RenameScript.cpp" "src/Scripts/ChatDeleteScript.h" "src/Scripts/ChatDeleteScript.cpp" "src/Scripts/ChatListFetchScript.h" "src/Scripts/ChatListFetchScript.cpp")
+ "src/Parsers/InitParser.cpp" "src/Parsers/InitParser.h" "src/Scripts/InitScript.h" "src/Scripts/InitScript.cpp" "src/Scripts/ModelScript.h" "src/Scripts/ModelScript.cpp" "src/Scripts/TestScript.h" "src/Scripts/TestScript.cpp" "src/Scripts/RenameScript.h" "src/Scripts/RenameScript.cpp" "src/Scripts/ChatDeleteScript.h" "src/Scripts/ChatDeleteScript.cpp" "src/Scripts/ChatListFetchScript.h" "src/Scripts/ChatListFetchScript.cpp"
+ src/ui/DwnldScreen.h
+ src/ui/DwnldScreen.cpp)
 
 target_include_directories(DESKTOP_GPT PRIVATE
     src

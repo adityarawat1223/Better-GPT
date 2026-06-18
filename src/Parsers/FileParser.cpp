@@ -94,5 +94,6 @@ FileParser::~FileParser()
         for (const auto& chatId : AppState::GetOpenChats()) {
             emit EventDispatcher::instance()->chatMessageUpdated(chatId);
         }
+        emit EventDispatcher::instance()->fileDownloadComplete(file_name);
     }
 }

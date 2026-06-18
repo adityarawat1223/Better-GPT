@@ -8,8 +8,6 @@ void LibraryScript() {
     std::string session_id = AppState::GetHeaders("OAI-Session-Id");
     std::string device_id = AppState::GetHeaders("OAI-Device-Id");
     std::string build_num = AppState::GetHeaders("OAI-Client-Build-Number");
-
-
     std::string js = R"((async () => {
     try {
         const authToken = `)" + EscapeForJs(token) + R"(`;
